@@ -72,7 +72,6 @@ data/
 backend/data/
 frontend/data/
 
-sessions/
 exports/
 
 *.log
