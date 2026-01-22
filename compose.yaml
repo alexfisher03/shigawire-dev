@@ -1,1 +1,13 @@
 services:
+  backend:
+    image: golang:1.25-alpine
+    container_name: shigawire-backend
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    command: sh -c "go mod download && go run ./cmd/server"
+    restart: unless-stopped
