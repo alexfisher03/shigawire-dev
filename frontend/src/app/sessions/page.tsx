@@ -12,7 +12,7 @@ async function getSessions(): Promise<Session[]> {
   const base = getBackendBaseUrl();
 
   try {
-    const response = await fetch(`${base}/api/v1/sessions/dummy`, {
+    const response = await fetch(`${base}/api/v1/sessions`, {
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
     });
