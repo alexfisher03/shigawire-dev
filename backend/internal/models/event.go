@@ -1,12 +1,10 @@
 package models
 
-import (
-	"time"
-)
-
 type Event struct {
-	Id        string    `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Type      string    `json:"type"` // Request | Response
-
+	Id        string `json:"id"`
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	Status    int    `json:"status"`
+	Duration  int    `json:"duration"`
+	Timestamp string `json:"timestamp"`
 }
