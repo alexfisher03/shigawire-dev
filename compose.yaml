@@ -11,3 +11,21 @@ services:
       - PORT=8080
     command: sh -c "go mod download && go run ./cmd/server"
     restart: unless-stopped
+
+  frontend:
+    image: node:20-alpine
+    container_name: shigawire-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - BACKEND_INTERNAL_URL=http://backend:8080
+    command: sh -c "npm ci && npm run dev -- -H 0.0.0.0 -p 3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
