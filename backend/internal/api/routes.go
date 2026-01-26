@@ -9,7 +9,8 @@ import (
 func RegisterRoutes(app *fiber.App) {
 	v1 := app.Group("/api/v1")
 
-	v1.Get("/sessions/dummy", handlers.GetDummySessions)
-	v1.Get("/sessions/:id", handlers.GetDummySession)
-	v1.Get("/sessions/:id/events", handlers.GetDummySessionEvents)
+	v1.Get("/sessions", handlers.GetSessions)
+	v1.Post("/sessions", handlers.CreateSessionHTTP)
+	v1.Get("/sessions/:id", handlers.GetSession)
+	v1.Get("/sessions/:id/events", handlers.ListSessionEvents)
 }

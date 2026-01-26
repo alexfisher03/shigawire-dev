@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,7 +16,7 @@ func SaveSession(session *models.Session) error {
 	return nil
 }
 
-func CreateSession(name string) (*models.Session, error) {
+func createNewSession(name string) (*models.Session, error) {
 	session := &models.Session{
 		Id:        models.GenerateSessionId(),
 		Name:      name,
@@ -34,7 +35,7 @@ var (
 	dummySessionsOnce sync.Once
 )
 
-func getDummySessions() []*models.Session {
+func listSessions() []*models.Session {
 	dummySessionsOnce.Do(func() {
 		sessionNames := []string{
 			"API Login Flow",
@@ -60,13 +61,13 @@ func getDummySessions() []*models.Session {
 	return dummySessions
 }
 
-func GetDummySessions(c *fiber.Ctx) error {
-	return c.JSON(getDummySessions())
+func GetSessions(c *fiber.Ctx) error {
+	return c.JSON(listSessions())
 }
 
-func GetDummySession(c *fiber.Ctx) error {
+func GetSession(c *fiber.Ctx) error {
 	sessionId := c.Params("id")
-	for _, session := range getDummySessions() {
+	for _, session := range listSessions() {
 		if session.Id == sessionId {
 			return c.JSON(session)
 		}
@@ -86,7 +87,7 @@ type dummyEvent struct {
 	Timestamp string `json:"timestamp"`
 }
 
-func GetDummySessionEvents(c *fiber.Ctx) error {
+func ListSessionEvents(c *fiber.Ctx) error {
 	sessionId := c.Params("id")
 	now := time.Now()
 
@@ -126,4 +127,27 @@ func GetDummySessionEvents(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(events)
+}
+
+func CreateSessionHTTP(c *fiber.Ctx) error {
+	var req models.CreateSessionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid JSON body",
+		})
+	}
+
+	if strings.TrimSpace(req.Name) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "name is required",
+		})
+	}
+	session, err := createNewSession(req.Name)
+	if err != nil {
+		c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to create session",
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(session)
 }

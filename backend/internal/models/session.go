@@ -4,6 +4,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type CreateSessionRequest struct {
+	Name string `json:"name"`
+}
+
 type Session struct {
 	Id        string `json:"id"`
 	Name      string `json:"name"`
