@@ -1,0 +1,387 @@
+openapi: 3.0.0
+info:
+  title: Shigawire API
+  version: 1.0.0
+  description: API for session capture, replay, and event streaming
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/sessions:
+    get:
+      summary: List all sessions
+      tags:
+        - Sessions
+      responses:
+        '200':
+          description: A list of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new session
+      tags:
+        - Sessions
+      responses:
+        '200':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/sessions/{id}:
+    get:
+      summary: Get a session by ID
+      tags:
+        - Sessions
+      responses:
+        '200':
+          description: A session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/sessions/{id}/events:
+    get:
+      summary: List all events for a session
+      tags:
+        - Sessions
+      responses:
+        '200':
+          description: A list of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/sessions/{id}/capture/start:
+    post:
+      summary: Start capturing events for a session
+      tags:
+        - Capture Control
+      responses:
+        '200':
+          description: Capture started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '409':
+          description: Capture already started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/sessions/{id}/capture/stop:
+    post:
+      summary: Stop capturing events for a session
+      tags:
+        - Capture Control
+      responses:
+        '200':
+          description: Capture stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '409':
+          description: Capture not started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/sessions/{id}/replay/start:
+    post:
+      summary: Start replaying a session
+      tags:
+        - Replay Control
+      responses:
+        '200':
+          description: Replay started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/replay/{replayId}/pause:
+    post:
+      summary: Pause a replay
+      tags:
+        - Replay Control
+      responses:
+        '200':
+          description: Replay paused
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Replay not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/replay/{replayId}/step:
+    post:
+      summary: Step a replay
+      tags:
+        - Replay Control
+      responses:
+        '200':
+          description: Replay stepped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: ReplayId not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/replay/{replayId}/speed:
+    post:
+      summary: Set the speed of a replay
+      tags:
+        - Replay Control
+      responses:
+        '200':
+          description: Replay speed set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: ReplayId not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/replay/{replayId}/events:
+    websocket:
+      summary: Get events for a replay
+      tags:
+        - Replay Control
+      responses:
+        '200':
+          description: Events received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Replay not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+ 
+components:
+  tags:
+    - name: Sessions
+      description: |
+        Manage and query session data. Sessions represent capture sessions
+        that contain recorded events.
+    - name: Capture Control
+      description: |
+        Control the capture process for sessions. Start and stop capturing
+        events for a specific session.
+    - name: Replay Control
+      description: |
+        Control the replay process for sessions. Start and stop replaying
+        events for a specific session.

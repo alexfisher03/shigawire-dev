@@ -29,3 +29,14 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: shigawire-swagger-ui
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./docs:/usr/share/nginx/html/docs:ro
+    environment:
+      - SWAGGER_JSON=/usr/share/nginx/html/docs/openapi.yaml
+    restart: unless-stopped
