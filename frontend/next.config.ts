@@ -5,8 +5,8 @@ const nextConfig: NextConfig = {
     const backend = process.env.BACKEND_INTERNAL_URL || "http://localhost:8080";
     return [
       {
-        source: "/api/:path*",
-        destination: `${backend}/api/:path*`,
+        source: "/api/v1/:path*",
+        destination: `${backend}/api/v1/:path*`,
       },
     ];
   },
