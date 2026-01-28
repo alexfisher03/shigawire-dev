@@ -3,14 +3,7 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { ChevronRight, Lock, Plus } from 'lucide-react'
-import { getBackendBaseUrl } from '@/lib/backend'
-
-interface Session {
-  id: string
-  name: string
-  created_at?: string
-  sealed?: boolean
-}
+import { createSession, getSessionEvents, listSessions, Session } from '@/lib/api'
 
 interface SessionWithStats extends Session {
   requests: number
@@ -21,44 +14,6 @@ interface SessionListProps {
   onSessionSelect: (sessionId: string) => void
 }
 
-async function fetchSessions(): Promise<Session[]> {
-  try {
-    const response = await fetch(`${getBackendBaseUrl()}/api/v1/sessions`, {
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sessions: ${response.statusText}`)
-    }
-
-    return await response.json()
-  } catch (error) {
-    console.error('Error fetching sessions:', error)
-    return []
-  }
-}
-
-async function fetchSessionEvents(sessionId: string): Promise<{ count: number; redacted: number }> {
-  try {
-    const response = await fetch(`${getBackendBaseUrl()}/api/v1/sessions/${sessionId}/events`, {
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-    })
-
-    if (!response.ok) {
-      return { count: 0, redacted: 0 }
-    }
-
-    const events = await response.json()
-    // For now, redacted count is 0 since backend doesn't track it yet
-    return { count: events.length || 0, redacted: 0 }
-  } catch (error) {
-    console.error('Error fetching session events:', error)
-    return { count: 0, redacted: 0 }
-  }
-}
-
 export function SessionList({ onSessionSelect }: SessionListProps) {
   const [sessions, setSessions] = useState<SessionWithStats[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,16 +21,17 @@ export function SessionList({ onSessionSelect }: SessionListProps) {
   useEffect(() => {
     async function loadSessions() {
       setLoading(true)
-      const fetchedSessions = await fetchSessions()
+      const fetchedSessions = await listSessions()
       
       // Fetch event counts for each session
       const sessionsWithStats = await Promise.all(
         fetchedSessions.map(async (session) => {
-          const { count, redacted } = await fetchSessionEvents(session.id)
+          const events = await getSessionEvents(session.id)
           return {
             ...session,
-            requests: count,
-            redacted,
+            requests: events.length || 0,
+            // For now, redacted count is 0 since backend doesn't track it yet
+            redacted: 0,
           }
         })
       )
@@ -91,26 +47,17 @@ export function SessionList({ onSessionSelect }: SessionListProps) {
     const name = prompt('Enter session name:')
     if (!name) return
 
-    try {
-      const response = await fetch(`${getBackendBaseUrl()}/api/v1/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
+    const newSession = await createSession(name)
 
-      if (response.ok) {
-        const newSession = await response.json()
-        setSessions([
-          {
-            ...newSession,
-            requests: 0,
-            redacted: 0,
-          },
-          ...sessions,
-        ])
-      }
-    } catch (error) {
-      console.error('Error creating session:', error)
+    if (newSession) {
+      setSessions([
+        {
+          ...newSession,
+          requests: 0,
+          redacted: 0,
+        },
+        ...sessions,
+      ])
     }
   }
 

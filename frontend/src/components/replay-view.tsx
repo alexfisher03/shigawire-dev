@@ -4,23 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, Play, Pause, RotateCcw } from 'lucide-react'
 import { TimelinePlayer } from './timeline-player'
 import { RequestInspector } from './request-inspector'
-import { getBackendBaseUrl } from '@/lib/backend'
-
-interface Session {
-  id: string
-  name: string
-  created_at?: string
-  sealed?: boolean
-}
-
-interface Event {
-  id: string
-  method: string
-  path: string
-  status?: number
-  duration?: number
-  timestamp?: string
-}
+import { Event, getSession, getSessionEvents, Session } from '@/lib/api'
 
 export function ReplayView({ sessionId, onBack }: { sessionId: string | null; onBack: () => void }) {
   const [isPlaying, setIsPlaying] = useState(false)
@@ -36,24 +20,16 @@ export function ReplayView({ sessionId, onBack }: { sessionId: string | null; on
     async function loadSessionData() {
       setLoading(true)
       try {
-        const [sessionRes, eventsRes] = await Promise.all([
-          fetch(`${getBackendBaseUrl()}/api/v1/sessions/${sessionId}`, {
-            headers: { 'Content-Type': 'application/json' },
-          }),
-          fetch(`${getBackendBaseUrl()}/api/v1/sessions/${sessionId}/events`, {
-            headers: { 'Content-Type': 'application/json' },
-          }),
+        const [sessionData, eventsData] = await Promise.all([
+          getSession(sessionId as string),
+          getSessionEvents(sessionId as string),
         ])
 
-        if (sessionRes.ok) {
-          const sessionData = await sessionRes.json()
+        if (sessionData) {
           setSession(sessionData)
         }
 
-        if (eventsRes.ok) {
-          const eventsData = await eventsRes.json()
-          setEvents(eventsData)
-        }
+        setEvents(eventsData)
       } catch (error) {
         console.error('Error loading session data:', error)
       } finally {

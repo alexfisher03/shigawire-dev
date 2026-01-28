@@ -1,35 +1,8 @@
-import { getBackendBaseUrl } from "@/lib/backend";
 import Link from "next/link";
-
-interface Session {
-  id: string;
-  name: string;
-  created_at?: string;
-  sealed?: boolean;
-}
-
-async function getSessions(): Promise<Session[]> {
-  const base = getBackendBaseUrl();
-
-  try {
-    const response = await fetch(`${base}/api/v1/sessions`, {
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sessions: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching sessions:", error);
-    return [];
-  }
-}
+import { listSessions, Session } from "@/lib/api";
 
 export default async function SessionsPage() {
-  const sessions = await getSessions();
+  const sessions = await listSessions();
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">

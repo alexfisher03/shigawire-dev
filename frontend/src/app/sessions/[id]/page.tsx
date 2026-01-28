@@ -1,67 +1,5 @@
-import { getBackendBaseUrl } from "@/lib/backend";
 import Link from "next/link";
-
-interface Event {
-  id: string;
-  method: string;
-  path: string;
-  status?: number;
-  duration?: number;
-  timestamp?: string;
-  requestBody?: string;
-  responseBody?: string;
-}
-
-interface SessionDetail {
-  id: string;
-  name: string;
-  created_at?: string;
-  sealed?: boolean;
-}
-
-async function getSessionDetail(id: string): Promise<SessionDetail | null> {
-  try {
-    const response = await fetch(
-      `${getBackendBaseUrl()}/api/v1/sessions/${id}`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching session detail:", error);
-    return null;
-  }
-}
-
-async function getSessionEvents(id: string): Promise<Event[]> {
-  try {
-    const response = await fetch(
-      `${getBackendBaseUrl()}/api/v1/sessions/${id}/events`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch events: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching events:", error);
-    return [];
-  }
-}
+import { Event, getSession, getSessionEvents, Session } from "@/lib/api";
 
 function getStatusColor(status?: number): string {
   if (!status) return "text-muted-foreground";
@@ -113,7 +51,7 @@ export default async function SessionDetailPage({
   }
 
   const [session, events] = await Promise.all([
-    getSessionDetail(id),
+    getSession(id),
     getSessionEvents(id),
   ]);
 
