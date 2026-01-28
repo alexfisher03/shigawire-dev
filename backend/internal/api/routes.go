@@ -13,4 +13,7 @@ func RegisterRoutes(app *fiber.App) {
 	v1.Post("/sessions", handlers.CreateSessionHTTP)
 	v1.Get("/sessions/:id", handlers.GetSession)
 	v1.Get("/sessions/:id/events", handlers.ListSessionEvents)
+
+	v1.Get("/swagger/*", handlers.GetSwaggerSpecification)
+	v1.Get("/openapi.yaml", handlers.GetOpenAPISpec)
 }
