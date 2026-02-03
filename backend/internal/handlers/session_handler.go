@@ -1,153 +1,92 @@
 package handlers
 
 import (
-	"time"
-
-	"fmt"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/shigawire-dev/internal/models"
+	"github.com/shigawire-dev/internal/store"
 )
 
-func SaveSession(session *models.Session) error {
-	fmt.Println("Saving Session", session.Id)
-	return nil
+type SessionHandler struct {
+	st *store.Store
 }
 
-func createNewSession(name string) (*models.Session, error) {
-	session := &models.Session{
+func NewSessionHandler(st *store.Store) *SessionHandler {
+	return &SessionHandler{st: st}
+}
+
+type CreateSessionRequest struct {
+	Name string `json:"name"`
+}
+
+func (h *SessionHandler) CreateSession(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+
+	p, err := store.GetProject(h.st.DB, projectId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get project"})
+	}
+	if p == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
+	}
+
+	var req CreateSessionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name is required"})
+	}
+
+	s := &models.Session{
 		Id:        models.GenerateSessionId(),
+		ProjectId: projectId,
 		Name:      name,
 		CreatedAt: time.Now().Format(time.RFC3339),
 		Sealed:    false,
 	}
 
-	if err := SaveSession(session); err != nil {
-		return nil, err
-	}
-	return session, nil
-}
-
-var (
-	dummySessions     []*models.Session
-	dummySessionsOnce sync.Once
-)
-
-func listSessions() []*models.Session {
-	dummySessionsOnce.Do(func() {
-		sessionNames := []string{
-			"API Login Flow",
-			"File Upload Session",
-			"User Registration",
-			"Data Export Request",
-			"Health Check Monitoring",
-		}
-
-		now := time.Now()
-		for i, name := range sessionNames {
-			createdAt := now.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339)
-			session := &models.Session{
-				Id:        models.GenerateSessionId(),
-				Name:      name,
-				CreatedAt: createdAt,
-				Sealed:    i%2 == 0,
-			}
-			dummySessions = append(dummySessions, session)
-		}
-	})
-
-	return dummySessions
-}
-
-func GetSessions(c *fiber.Ctx) error {
-	return c.JSON(listSessions())
-}
-
-func GetSession(c *fiber.Ctx) error {
-	sessionId := c.Params("id")
-	for _, session := range listSessions() {
-		if session.Id == sessionId {
-			return c.JSON(session)
-		}
+	if err := store.InsertSession(h.st.DB, s); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create session"})
 	}
 
-	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-		"error": "session not found",
-	})
+	return c.Status(fiber.StatusCreated).JSON(s)
 }
 
-type dummyEvent struct {
-	Id        string `json:"id"`
-	Method    string `json:"method"`
-	Path      string `json:"path"`
-	Status    int    `json:"status"`
-	Duration  int    `json:"duration"`
-	Timestamp string `json:"timestamp"`
-}
+func (h *SessionHandler) ListSessions(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
 
-func ListSessionEvents(c *fiber.Ctx) error {
-	sessionId := c.Params("id")
-	now := time.Now()
-
-	events := []dummyEvent{
-		{
-			Id:        fmt.Sprintf("%s_evt_1", sessionId),
-			Method:    "POST",
-			Path:      "/api/v1/login",
-			Status:    200,
-			Duration:  184,
-			Timestamp: now.Add(-4 * time.Minute).Format(time.RFC3339),
-		},
-		{
-			Id:        fmt.Sprintf("%s_evt_2", sessionId),
-			Method:    "GET",
-			Path:      "/api/v1/profile",
-			Status:    200,
-			Duration:  92,
-			Timestamp: now.Add(-3 * time.Minute).Format(time.RFC3339),
-		},
-		{
-			Id:        fmt.Sprintf("%s_evt_3", sessionId),
-			Method:    "PUT",
-			Path:      "/api/v1/profile",
-			Status:    204,
-			Duration:  221,
-			Timestamp: now.Add(-2 * time.Minute).Format(time.RFC3339),
-		},
-		{
-			Id:        fmt.Sprintf("%s_evt_4", sessionId),
-			Method:    "GET",
-			Path:      "/api/v1/notifications",
-			Status:    503,
-			Duration:  512,
-			Timestamp: now.Add(-90 * time.Second).Format(time.RFC3339),
-		},
-	}
-
-	return c.JSON(events)
-}
-
-func CreateSessionHTTP(c *fiber.Ctx) error {
-	var req models.CreateSessionRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid JSON body",
-		})
-	}
-
-	if strings.TrimSpace(req.Name) == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "name is required",
-		})
-	}
-	session, err := createNewSession(req.Name)
+	p, err := store.GetProject(h.st.DB, projectId)
 	if err != nil {
-		c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to create session",
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get project"})
+	}
+	if p == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(session)
+	sessions, err := store.ListSessionsByProject(h.st.DB, projectId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list sessions"})
+	}
+	return c.JSON(sessions)
+}
+
+func (h *SessionHandler) GetSession(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+	sessionId := c.Params("sessionId")
+
+	s, err := store.GetSession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+	}
+	if s == nil || s.ProjectId != projectId {
+		// if session exists but not under this project, treat as not found
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
+	}
+
+	return c.JSON(s)
 }
