@@ -6,10 +6,12 @@ services:
     volumes:
       - ./backend:/app
       - ./docs:/app/docs:ro
+      - ./data:/data
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
+      - DB_PATH=/data/shigawire.sqlite
     command: sh -c "go mod download && go run ./cmd/server"
     restart: unless-stopped
 
