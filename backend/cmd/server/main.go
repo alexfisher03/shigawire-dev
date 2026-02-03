@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	api "github.com/shigawire-dev/internal/api"
+	"github.com/shigawire-dev/internal/store"
 )
 
 func main() {
@@ -24,8 +25,18 @@ func main() {
 
 	app.Use(logger.New())
 
-	api.RegisterRoutes(app)
+	store, err := store.NewFromEnv()
+	if err != nil {
+		log.Fatal("failed to initialize store: %w", err)
+	}
 
+	defer func() {
+		if err := store.DB.Close(); err != nil {
+			log.Printf("failed to close db: %p", err)
+		}
+	}()
+
+	api.RegisterRoutes(app, store)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
