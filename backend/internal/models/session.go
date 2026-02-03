@@ -4,12 +4,9 @@ import (
 	"github.com/google/uuid"
 )
 
-type CreateSessionRequest struct {
-	Name string `json:"name"`
-}
-
 type Session struct {
 	Id        string `json:"id"`
+	ProjectId string `json:"project_id"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
 	Sealed    bool   `json:"sealed"`
