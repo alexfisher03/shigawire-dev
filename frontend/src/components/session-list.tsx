@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { ChevronRight, Lock, Plus } from 'lucide-react'
-import { createSession, getSessionEvents, listSessions, Session } from '@/lib/api'
+import { createSession, getSessionEvents, listSessions, listAllSessions, Session } from '@/lib/api'
 
 interface SessionWithStats extends Session {
   requests: number
@@ -11,22 +11,32 @@ interface SessionWithStats extends Session {
 }
 
 interface SessionListProps {
+  projectId?: string | null
   onSessionSelect: (sessionId: string) => void
 }
 
-export function SessionList({ onSessionSelect }: SessionListProps) {
+export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
   const [sessions, setSessions] = useState<SessionWithStats[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadSessions() {
       setLoading(true)
-      const fetchedSessions = await listSessions()
-      
+      let fetchedSessions: Session[] = []
+
+      if (projectId) {
+        fetchedSessions = await listSessions(projectId)
+      } else {
+        fetchedSessions = await listAllSessions()
+      }
+
       // Fetch event counts for each session
       const sessionsWithStats = await Promise.all(
         fetchedSessions.map(async (session) => {
-          const events = await getSessionEvents(session.id)
+          // backend now needs projectId to get events. 
+          // If we are in global view, we need session.project_id from the session object
+          const pid = projectId || session.project_id
+          const events = await getSessionEvents(pid, session.id)
           return {
             ...session,
             requests: events.length || 0,
@@ -41,13 +51,15 @@ export function SessionList({ onSessionSelect }: SessionListProps) {
     }
 
     loadSessions()
-  }, [])
+  }, [projectId])
 
   const handleNewSession = async () => {
+    if (!projectId) return // Cannot create session without a project context
+
     const name = prompt('Enter session name:')
     if (!name) return
 
-    const newSession = await createSession(name)
+    const newSession = await createSession(projectId, name)
 
     if (newSession) {
       setSessions([
@@ -66,18 +78,22 @@ export function SessionList({ onSessionSelect }: SessionListProps) {
       <div className="p-6 border-b border-blue-900/50">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-mono font-semibold text-blue-200 tracking-wide">Sessions</h2>
+            <h2 className="text-2xl font-mono font-semibold text-blue-200 tracking-wide">
+              {projectId ? 'Project Sessions' : 'All Sessions'}
+            </h2>
             <p className="text-sm font-mono text-blue-400/70 mt-1">
               {loading ? 'Loading...' : `${sessions.length} total sessions`}
             </p>
           </div>
-          <button
-            onClick={handleNewSession}
-            className="px-4 py-2 rounded border border-blue-600/70 bg-blue-600/10 text-blue-200 font-mono text-sm hover:bg-blue-600/20 transition-colors flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            New Session
-          </button>
+          {projectId && (
+            <button
+              onClick={handleNewSession}
+              className="px-4 py-2 rounded border border-blue-600/70 bg-blue-600/10 text-blue-200 font-mono text-sm hover:bg-blue-600/20 transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              New Session
+            </button>
+          )}
         </div>
       </div>
 
@@ -86,12 +102,12 @@ export function SessionList({ onSessionSelect }: SessionListProps) {
           <div className="p-6 text-center text-blue-400/70 font-mono">Loading sessions...</div>
         ) : sessions.length === 0 ? (
           <div className="p-12 text-center">
-            <p className="text-blue-400/70 font-mono">No sessions found. Create a new session to get started.</p>
+            <p className="text-blue-400/70 font-mono">No sessions found. {projectId && 'Create a new session to get started.'}</p>
           </div>
         ) : (
           <div className="divide-y divide-blue-900/50">
             {sessions.map((session) => (
-              <SessionRow key={session.id} session={session} onSelect={onSessionSelect} />
+              <SessionRow key={session.id} session={session} onSelect={onSessionSelect} showProjectTag={!projectId} />
             ))}
           </div>
         )}
@@ -100,7 +116,7 @@ export function SessionList({ onSessionSelect }: SessionListProps) {
   )
 }
 
-function SessionRow({ session, onSelect }: { session: SessionWithStats; onSelect: (sessionId: string) => void }) {
+function SessionRow({ session, onSelect, showProjectTag }: { session: SessionWithStats; onSelect: (sessionId: string) => void; showProjectTag?: boolean }) {
   const startTime = session.created_at ? new Date(session.created_at) : new Date()
 
   return (
@@ -112,6 +128,11 @@ function SessionRow({ session, onSelect }: { session: SessionWithStats; onSelect
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <h3 className="text-sm font-mono font-semibold text-blue-200 truncate">{session.name}</h3>
+            {showProjectTag && session.projectName && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-500/50 bg-purple-500/10 text-purple-400 text-xs font-mono whitespace-nowrap">
+                {session.projectName}
+              </span>
+            )}
             {session.redacted > 0 && (
               <div className="flex items-center gap-1 px-2 py-0.5 rounded border border-blue-600/50 bg-blue-600/20 text-blue-300 text-xs font-mono whitespace-nowrap">
                 <Lock className="w-3 h-3" />
