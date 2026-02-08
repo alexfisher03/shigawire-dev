@@ -11,6 +11,7 @@ import { listProjects, Project } from '@/lib/api'
 export default function Home() {
   const [view, setView] = useState<'list' | 'replay'>('list')
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [replayProjectId, setReplayProjectId] = useState<string | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -24,8 +25,9 @@ export default function Home() {
     setProjects(fetched)
   }
 
-  const handleSessionSelect = (sessionId: string) => {
+  const handleSessionSelect = (sessionId: string, projectId: string) => {
     setSelectedSessionId(sessionId)
+    setReplayProjectId(projectId)
     setView('replay')
   }
 
@@ -49,19 +51,19 @@ export default function Home() {
   // Determine main content based on state
   const renderContent = () => {
     if (view === 'replay') {
-      return <ReplayView sessionId={selectedSessionId} onBack={() => setView('list')} />
+      return <ReplayView projectId={replayProjectId} sessionId={selectedSessionId} onBack={() => setView('list')} />
     }
 
     if (selectedProjectId) {
       return <ProjectView
         projectId={selectedProjectId}
-        onSessionSelect={handleSessionSelect}
+        onSessionSelect={(sessionId) => handleSessionSelect(sessionId, selectedProjectId)}
         onUpdateProject={handleProjectUpdated}
       />
     }
 
     // Default: Global Session List (Aggregated)
-    return <SessionList onSessionSelect={handleSessionSelect} />
+    return <SessionList onSessionSelect={(sessionId, projectId) => handleSessionSelect(sessionId, projectId)} />
   }
 
   return (
