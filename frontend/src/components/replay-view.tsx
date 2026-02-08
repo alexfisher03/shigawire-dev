@@ -6,7 +6,7 @@ import { TimelinePlayer } from './timeline-player'
 import { RequestInspector } from './request-inspector'
 import { Event, getSession, getSessionEvents, Session } from '@/lib/api'
 
-export function ReplayView({ sessionId, onBack }: { sessionId: string | null; onBack: () => void }) {
+export function ReplayView({ projectId, sessionId, onBack }: { projectId: string | null; sessionId: string | null; onBack: () => void }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [selectedRequest, setSelectedRequest] = useState(0)
@@ -15,14 +15,14 @@ export function ReplayView({ sessionId, onBack }: { sessionId: string | null; on
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || !projectId) return
 
     async function loadSessionData() {
       setLoading(true)
       try {
         const [sessionData, eventsData] = await Promise.all([
-          getSession(sessionId as string),
-          getSessionEvents(sessionId as string),
+          getSession(projectId as string, sessionId as string),
+          getSessionEvents(projectId as string, sessionId as string),
         ])
 
         if (sessionData) {
@@ -38,7 +38,7 @@ export function ReplayView({ sessionId, onBack }: { sessionId: string | null; on
     }
 
     loadSessionData()
-  }, [sessionId])
+  }, [sessionId, projectId])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -46,7 +46,7 @@ export function ReplayView({ sessionId, onBack }: { sessionId: string | null; on
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const totalDuration = events.reduce((acc, e) => acc + (e.duration || 0), 0)
+  const totalDuration = events.reduce((acc, e) => acc + (e.durationMs || 0), 0)
   const currentTime = 0 // TODO: Calculate based on playback position
 
   return (

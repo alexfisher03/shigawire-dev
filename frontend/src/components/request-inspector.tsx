@@ -4,15 +4,7 @@ import React from "react"
 
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-
-interface Event {
-  id: string
-  method: string
-  path: string
-  status?: number
-  duration?: number
-  timestamp?: string
-}
+import { Event } from '@/lib/api'
 
 const getStatusText = (status?: number) => {
   if (!status) return 'Unknown'
@@ -51,11 +43,11 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
             <div className="space-y-2 text-xs font-mono">
               <div>
                 <span className="text-blue-300 font-bold">{event.method}</span>{' '}
-                <span className="text-blue-400/70">{event.path}</span>
+                <span className="text-blue-400/70">{event.url}</span>
               </div>
-              {event.timestamp && (
+              {event.startedAt && (
                 <div className="text-blue-400/70 text-xs mt-2">
-                  {new Date(event.timestamp).toLocaleString()}
+                  {new Date(event.startedAt).toLocaleString()}
                 </div>
               )}
             </div>
@@ -70,9 +62,9 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
                 </span>{' '}
                 <span className="text-blue-400/70">{getStatusText(event.status)}</span>
               </div>
-              {event.duration && (
+              {event.durationMs && (
                 <div className="text-blue-400/70 text-xs mt-1">
-                  Duration: {event.duration}ms
+                  Duration: {event.durationMs}ms
                 </div>
               )}
             </div>
@@ -85,10 +77,10 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
                 <span className="text-blue-300 font-semibold">Event ID:</span>{' '}
                 <span className="text-blue-400/70">{event.id}</span>
               </div>
-              {event.timestamp && (
+              {event.startedAt && (
                 <div>
                   <span className="text-blue-300 font-semibold">Timestamp:</span>{' '}
-                  <span className="text-blue-400/70">{event.timestamp}</span>
+                  <span className="text-blue-400/70">{event.startedAt}</span>
                 </div>
               )}
             </div>

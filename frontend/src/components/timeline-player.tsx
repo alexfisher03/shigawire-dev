@@ -1,13 +1,6 @@
 'use client'
 
-interface Event {
-  id: string
-  method: string
-  path: string
-  status?: number
-  duration?: number
-  timestamp?: string
-}
+import { Event } from '@/lib/api'
 
 const getMethodColor = (method: string) => {
   switch (method.toUpperCase()) {
@@ -47,8 +40,8 @@ export function TimelinePlayer({
 }) {
   // Calculate relative timestamps from event timestamps
   const eventsWithTimestamps = events.map((event, index) => {
-    const timestamp = event.timestamp ? new Date(event.timestamp).getTime() : 0
-    const firstTimestamp = events[0]?.timestamp ? new Date(events[0].timestamp).getTime() : 0
+    const timestamp = event.startedAt ? new Date(event.startedAt).getTime() : 0
+    const firstTimestamp = events[0]?.startedAt ? new Date(events[0].startedAt).getTime() : 0
     return {
       ...event,
       relativeTimestamp: timestamp - firstTimestamp,
@@ -56,7 +49,7 @@ export function TimelinePlayer({
   })
 
   const maxTimestamp = eventsWithTimestamps.length > 0
-    ? Math.max(...eventsWithTimestamps.map((e) => e.relativeTimestamp + (e.duration || 0)))
+    ? Math.max(...eventsWithTimestamps.map((e) => e.relativeTimestamp + (e.durationMs || 0)))
     : 0
 
   if (events.length === 0) {
@@ -81,11 +74,10 @@ export function TimelinePlayer({
             <button
               key={event.id}
               onClick={() => onSelectRequest(index)}
-              className={`w-full p-3 rounded border transition-all text-left cursor-pointer ${
-                isSelected
-                  ? 'bg-blue-600/20 border-blue-600/50'
-                  : 'bg-blue-600/5 border-blue-900/50 hover:bg-blue-600/10'
-              }`}
+              className={`w-full p-3 rounded border transition-all text-left cursor-pointer ${isSelected
+                ? 'bg-blue-600/20 border-blue-600/50'
+                : 'bg-blue-600/5 border-blue-900/50 hover:bg-blue-600/10'
+                }`}
             >
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -93,7 +85,7 @@ export function TimelinePlayer({
                     {event.method}
                   </span>
                   <code className="text-xs text-blue-300/70 truncate font-mono">
-                    {event.path}
+                    {event.url}
                   </code>
                 </div>
                 {event.status && (
@@ -106,13 +98,13 @@ export function TimelinePlayer({
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-blue-400/70 font-mono">
                   <span>+{event.relativeTimestamp}ms</span>
-                  {event.duration && <span>{event.duration}ms</span>}
+                  {event.durationMs && <span>{event.durationMs}ms</span>}
                 </div>
-                {event.duration && maxTimestamp > 0 && (
+                {event.durationMs && maxTimestamp > 0 && (
                   <div className="h-1.5 bg-blue-900/50 rounded overflow-hidden">
                     <div
                       className="h-full bg-blue-500/60"
-                      style={{ width: `${Math.min((event.duration / maxTimestamp) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((event.durationMs / maxTimestamp) * 100, 100)}%` }}
                     />
                   </div>
                 )}
@@ -131,7 +123,7 @@ export function TimelinePlayer({
             <div>
               Average response:{' '}
               {Math.round(
-                events.reduce((acc, e) => acc + (e.duration || 0), 0) / events.length
+                events.reduce((acc, e) => acc + (e.durationMs || 0), 0) / events.length
               )}
               ms
             </div>

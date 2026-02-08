@@ -12,7 +12,7 @@ interface SessionWithStats extends Session {
 
 interface SessionListProps {
   projectId?: string | null
-  onSessionSelect: (sessionId: string) => void
+  onSessionSelect: (sessionId: string, projectId: string) => void
 }
 
 export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
@@ -33,8 +33,6 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
       // Fetch event counts for each session
       const sessionsWithStats = await Promise.all(
         fetchedSessions.map(async (session) => {
-          // backend now needs projectId to get events. 
-          // If we are in global view, we need session.project_id from the session object
           const pid = projectId || session.project_id
           const events = await getSessionEvents(pid, session.id)
           return {
@@ -116,12 +114,12 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
   )
 }
 
-function SessionRow({ session, onSelect, showProjectTag }: { session: SessionWithStats; onSelect: (sessionId: string) => void; showProjectTag?: boolean }) {
+function SessionRow({ session, onSelect, showProjectTag }: { session: SessionWithStats; onSelect: (sessionId: string, projectId: string) => void; showProjectTag?: boolean }) {
   const startTime = session.created_at ? new Date(session.created_at) : new Date()
 
   return (
     <button
-      onClick={() => onSelect(session.id)}
+      onClick={() => onSelect(session.id, session.project_id)}
       className="w-full px-6 py-4 pointer-events-auto hover:bg-blue-600/10 border-b border-blue-900/50 last:border-b-0 transition-colors text-left cursor-pointer"
     >
       <div className="flex items-center justify-between gap-4">
