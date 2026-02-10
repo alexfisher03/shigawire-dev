@@ -1,20 +1,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Project, ProjectConfig, updateProject, createProject } from '@/lib/api'
-import { Save, X } from 'lucide-react'
+import { Project, ProjectConfig, updateProject, createProject, deleteProject } from '@/lib/api'
+import { Save, X, Trash2 } from 'lucide-react'
+import { ConfirmDialog } from './confirm-dialog'
 
 interface ProjectConfigFormProps {
     project?: Project
     onUpdate?: (updatedProject: Project) => void
     onCreate?: (newProject: Project) => void
+    onDelete?: (projectId: string) => void
     onClose: () => void
 }
 
-export function ProjectConfigForm({ project, onUpdate, onCreate, onClose }: ProjectConfigFormProps) {
+export function ProjectConfigForm({ project, onUpdate, onCreate, onDelete, onClose }: ProjectConfigFormProps) {
     const [config, setConfig] = useState<ProjectConfig>({})
     const [name, setName] = useState('')
     const [loading, setLoading] = useState(false)
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
     // Parse config on mount or project change
     useEffect(() => {
@@ -58,6 +61,20 @@ export function ProjectConfigForm({ project, onUpdate, onCreate, onClose }: Proj
             }
         }
         setLoading(false)
+    }
+
+    const handleDelete = async () => {
+        if (!project) return
+        setLoading(true)
+        const success = await deleteProject(project.id)
+        if (success && onDelete) {
+            onDelete(project.id)
+            onClose()
+        } else if (!success) {
+            alert('Failed to delete project')
+        }
+        setLoading(false)
+        setShowDeleteConfirm(false)
     }
 
     const title = project ? "Project Configuration" : "Create New Project"
@@ -144,7 +161,18 @@ export function ProjectConfigForm({ project, onUpdate, onCreate, onClose }: Proj
                     </form>
                 </div>
 
-                <div className="px-6 py-4 border-t border-blue-900/50 bg-blue-900/10 flex justify-end">
+                <div className="px-6 py-4 border-t border-blue-900/50 bg-blue-900/10 flex justify-between">
+                    {project ? (
+                        <button
+                            type="button"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-4 py-2 border border-red-500/50 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded font-mono text-sm transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Project
+                        </button>
+                    ) : <div />}
                     <button
                         type="submit"
                         form="project-config-form"
@@ -156,6 +184,17 @@ export function ProjectConfigForm({ project, onUpdate, onCreate, onClose }: Proj
                     </button>
                 </div>
             </div>
+
+            {showDeleteConfirm && (
+                <ConfirmDialog
+                    title="Delete Project"
+                    message="Are you sure? This will permanently delete this project and all its sessions."
+                    confirmLabel="Delete Project"
+                    onConfirm={handleDelete}
+                    onCancel={() => setShowDeleteConfirm(false)}
+                    loading={loading}
+                />
+            )}
         </div>
     )
 }

@@ -63,3 +63,11 @@ func UpdateProject(db *sql.DB, p *models.Project) error {
 	}
 	return nil
 }
+
+func DeleteProject(db *sql.DB, id string) error {
+	_, err := db.Exec(`DELETE FROM projects WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete project: %w", err)
+	}
+	return nil
+}

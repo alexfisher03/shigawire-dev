@@ -9,10 +9,11 @@ import { Settings } from 'lucide-react'
 interface ProjectViewProps {
     projectId: string
     onSessionSelect: (sessionId: string) => void
-    onUpdateProject: (project: Project) => void // New prop to bubble up updates
+    onUpdateProject: (project: Project) => void
+    onDeleteProject: (projectId: string) => void
 }
 
-export function ProjectView({ projectId, onSessionSelect, onUpdateProject }: ProjectViewProps) {
+export function ProjectView({ projectId, onSessionSelect, onUpdateProject, onDeleteProject }: ProjectViewProps) {
     const [project, setProject] = useState<Project | null>(null)
     const [isConfigOpen, setIsConfigOpen] = useState(false)
 
@@ -60,6 +61,7 @@ export function ProjectView({ projectId, onSessionSelect, onUpdateProject }: Pro
                 <ProjectConfigForm
                     project={project}
                     onUpdate={handleProjectUpdate}
+                    onDelete={onDeleteProject}
                     onClose={() => setIsConfigOpen(false)}
                 />
             )}

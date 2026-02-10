@@ -1,18 +1,28 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, Play, Pause, RotateCcw } from 'lucide-react'
+import { ChevronLeft, Play, Pause, RotateCcw, Trash2 } from 'lucide-react'
 import { TimelinePlayer } from './timeline-player'
 import { RequestInspector } from './request-inspector'
-import { Event, getSession, getSessionEvents, Session } from '@/lib/api'
+import { Event, getSession, getSessionEvents, Session, deleteSession } from '@/lib/api'
+import { ConfirmDialog } from './confirm-dialog'
 
-export function ReplayView({ projectId, sessionId, onBack }: { projectId: string | null; sessionId: string | null; onBack: () => void }) {
+interface ReplayViewProps {
+  projectId: string | null
+  sessionId: string | null
+  onBack: () => void
+  onDeleteSession?: () => void
+}
+
+export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: ReplayViewProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [selectedRequest, setSelectedRequest] = useState(0)
   const [session, setSession] = useState<Session | null>(null)
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!sessionId || !projectId) return
@@ -64,7 +74,16 @@ export function ReplayView({ projectId, sessionId, onBack }: { projectId: string
           <h2 className="text-lg font-mono font-semibold text-blue-200 tracking-wide">
             {loading ? 'Loading...' : session?.name || 'Session'}
           </h2>
-          <div className="w-32" />
+          {/* Delete Session */}
+          <div className="w-32 flex justify-end">
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 hover:bg-red-500/20 border border-red-500/30 rounded transition-colors text-red-400/70 hover:text-red-300 cursor-pointer"
+              title="Delete Session"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -129,6 +148,29 @@ export function ReplayView({ projectId, sessionId, onBack }: { projectId: string
             <RequestInspector requestIndex={selectedRequest} events={events} />
           </div>
         </div>
+      )}
+
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title="Delete Session"
+          message="Are you sure? This will permanently delete this session and all its events."
+          confirmLabel="Delete Session"
+          onConfirm={async () => {
+            if (!projectId || !sessionId) return
+            setDeleting(true)
+            const success = await deleteSession(projectId, sessionId)
+            setDeleting(false)
+            if (success) {
+              setShowDeleteConfirm(false)
+              onDeleteSession?.()
+              onBack()
+            } else {
+              alert('Failed to delete session')
+            }
+          }}
+          onCancel={() => setShowDeleteConfirm(false)}
+          loading={deleting}
+        />
       )}
     </div>
   )

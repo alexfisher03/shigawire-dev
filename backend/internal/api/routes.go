@@ -18,10 +18,12 @@ func RegisterRoutes(app *fiber.App, st *store.Store) {
 	v1.Get("/projects", ph.ListProjects)
 	v1.Get("/projects/:projectId", ph.GetProject)
 	v1.Put("/projects/:projectId", ph.UpdateProject)
+	v1.Delete("/projects/:projectId", ph.DeleteProject)
 
 	v1.Post("/projects/:projectId/sessions", sh.CreateSession)
 	v1.Get("/projects/:projectId/sessions", sh.ListSessions)
 	v1.Get("/projects/:projectId/sessions/:sessionId", sh.GetSession)
+	v1.Delete("/projects/:projectId/sessions/:sessionId", sh.DeleteSession)
 
 	v1.Get("/projects/:projectId/sessions/:sessionId/events", eh.ListEvents)
 	v1.Post("/projects/:projectId/sessions/:sessionId/events", eh.SeedEvent)

@@ -114,3 +114,21 @@ func (h *ProjectHandler) UpdateProject(c *fiber.Ctx) error {
 
 	return c.JSON(existing)
 }
+
+func (h *ProjectHandler) DeleteProject(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+
+	existing, err := store.GetProject(h.st.DB, projectId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get project"})
+	}
+	if existing == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
+	}
+
+	if err := store.DeleteProject(h.st.DB, projectId); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete project"})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
