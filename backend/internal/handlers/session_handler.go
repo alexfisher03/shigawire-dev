@@ -90,3 +90,22 @@ func (h *SessionHandler) GetSession(c *fiber.Ctx) error {
 
 	return c.JSON(s)
 }
+
+func (h *SessionHandler) DeleteSession(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+	sessionId := c.Params("sessionId")
+
+	s, err := store.GetSession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+	}
+	if s == nil || s.ProjectId != projectId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
+	}
+
+	if err := store.DeleteSession(h.st.DB, sessionId); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete session"})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}

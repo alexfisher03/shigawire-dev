@@ -69,6 +69,14 @@ func GetSession(db *sql.DB, sessionId string) (*models.Session, error) {
 	return &s, nil
 }
 
+func DeleteSession(db *sql.DB, id string) error {
+	_, err := db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

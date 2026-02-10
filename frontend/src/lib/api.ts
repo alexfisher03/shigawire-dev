@@ -110,6 +110,23 @@ export async function updateProject(projectId: string, name: string, config: Pro
   }
 }
 
+export async function deleteProject(projectId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      console.error("Failed to delete project:", response.statusText);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    return false;
+  }
+}
+
 // --- Session API ---
 
 export async function listSessions(projectId: string): Promise<Session[]> {
@@ -214,3 +231,21 @@ export async function createSession(projectId: string, name: string): Promise<Se
     return null;
   }
 }
+
+export async function deleteSession(projectId: string, sessionId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      console.error("Failed to delete session:", response.statusText);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error deleting session:", error);
+    return false;
+  }
+}
+

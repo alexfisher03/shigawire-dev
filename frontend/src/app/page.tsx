@@ -48,6 +48,14 @@ export default function Home() {
     setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p))
   }
 
+  // Called when a project is deleted
+  const handleProjectDeleted = (projectId: string) => {
+    setProjects(prev => prev.filter(p => p.id !== projectId))
+    if (selectedProjectId === projectId) {
+      setSelectedProjectId(null)
+    }
+  }
+
   // Determine main content based on state
   const renderContent = () => {
     if (view === 'replay') {
@@ -59,6 +67,7 @@ export default function Home() {
         projectId={selectedProjectId}
         onSessionSelect={(sessionId) => handleSessionSelect(sessionId, selectedProjectId)}
         onUpdateProject={handleProjectUpdated}
+        onDeleteProject={handleProjectDeleted}
       />
     }
 
