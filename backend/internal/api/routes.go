@@ -2,16 +2,17 @@ package api
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/shigawire-dev/internal/control"
 	"github.com/shigawire-dev/internal/handlers"
 	"github.com/shigawire-dev/internal/store"
 )
 
 // RegisterRoutes sets up all HTTP routes for the API
-func RegisterRoutes(app *fiber.App, st *store.Store) {
+func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState) {
 	v1 := app.Group("/api/v1")
 
 	ph := handlers.NewProjectHandler(st)
-	sh := handlers.NewSessionHandler(st)
+	sh := handlers.NewSessionHandler(st, rec)
 	eh := handlers.NewEventHandler(st)
 
 	v1.Post("/projects", ph.CreateProject)
@@ -24,6 +25,10 @@ func RegisterRoutes(app *fiber.App, st *store.Store) {
 	v1.Get("/projects/:projectId/sessions", sh.ListSessions)
 	v1.Get("/projects/:projectId/sessions/:sessionId", sh.GetSession)
 	v1.Delete("/projects/:projectId/sessions/:sessionId", sh.DeleteSession)
+
+	v1.Post("/projects/:projectId/sessions/:sessionId/record/start", sh.StartRecording)
+	v1.Post("/projects/:projectId/sessions/:sessionId/record/stop", sh.StopRecording)
+	v1.Get("/projects/:projectId/sessions/:sessionId/record/status", sh.RecordingStatus)
 
 	v1.Get("/projects/:projectId/sessions/:sessionId/events", eh.ListEvents)
 	v1.Post("/projects/:projectId/sessions/:sessionId/events", eh.SeedEvent)

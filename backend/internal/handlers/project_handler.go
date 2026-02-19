@@ -40,13 +40,24 @@ func (h *ProjectHandler) CreateProject(c *fiber.Ctx) error {
 		cfg = json.RawMessage(`{}`)
 	}
 
+	normalized, err := models.NormalizeProjectConfig(string(cfg))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	p := &models.Project{
 		Id:         models.GenerateProjectId(),
 		Name:       name,
-		ConfigJSON: string(cfg),
+		ConfigJSON: normalized,
 		CreatedAt:  time.Now().Format(time.RFC3339),
 	}
+
 	if err := store.InsertProject(h.st.DB, p); err != nil {
+		// sqlite unique name violation
+		lower := strings.ToLower(err.Error())
+		if strings.Contains(lower, "unique") && strings.Contains(lower, "projects.name") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "project name already exists"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create project"})
 	}
 
@@ -105,8 +116,13 @@ func (h *ProjectHandler) UpdateProject(c *fiber.Ctx) error {
 		cfg = json.RawMessage(existing.ConfigJSON)
 	}
 
+	normalized, err := models.NormalizeProjectConfig(string(cfg))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	existing.Name = name
-	existing.ConfigJSON = string(cfg)
+	existing.ConfigJSON = normalized
 
 	if err := store.UpdateProject(h.st.DB, existing); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update project"})

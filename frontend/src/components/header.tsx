@@ -1,6 +1,6 @@
-'use client'
+"use client";
 
-import { Route, Settings } from 'lucide-react'
+import { Route } from "lucide-react";
 
 export function Header() {
   return (
@@ -11,20 +11,16 @@ export function Header() {
             <Route className="w-5 h-5 text-blue-300" />
           </div>
           <div>
-            <h1 className="text-lg font-mono font-semibold text-blue-200 tracking-wide">Shigawire Dev</h1>
-            <p className="text-xs font-mono text-blue-400/70">HTTP Recording & Replay</p>
+            <h1 className="text-lg font-mono font-semibold text-blue-200 tracking-wide">
+              Shigawire Dev
+            </h1>
+            <p className="text-xs font-mono text-blue-400/70">
+              HTTP Recording & Replay
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          {/* <div className="flex items-center gap-2 px-3 py-1 rounded text-xs bg-orange-500/20 border border-orange-500/50 text-orange-400 font-mono">
-            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-            <span>Capture Active</span>
-          </div> */}
-          <button className="p-2 hover:bg-blue-600/10 border border-blue-900/50 rounded transition-colors">
-            <Settings className="w-5 h-5 text-blue-400/70" />
-          </button>
-        </div>
+        <div className="flex items-center gap-4"></div>
       </div>
     </header>
-  )
+  );
 }

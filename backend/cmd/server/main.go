@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	api "github.com/shigawire-dev/internal/api"
+	control "github.com/shigawire-dev/internal/control"
+	"github.com/shigawire-dev/internal/proxy"
 	"github.com/shigawire-dev/internal/store"
 )
 
@@ -36,12 +41,25 @@ func main() {
 		}
 	}()
 
-	api.RegisterRoutes(app, store)
+	rec := control.NewRecordingState()
+
+	api.RegisterRoutes(app, store, rec)
+
+	proxyListener := proxy.NewListenerFromEnv(store.DB, rec)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := proxyListener.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("proxy failed: %v", err)
+		}
+	}()
+	log.Printf("Proxy Started on: %s", proxyListener.Addr)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Server starting on %s", addr)
 	log.Fatal(app.Listen(addr))

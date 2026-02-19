@@ -5,16 +5,18 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/shigawire-dev/internal/control"
 	"github.com/shigawire-dev/internal/models"
 	"github.com/shigawire-dev/internal/store"
 )
 
 type SessionHandler struct {
-	st *store.Store
+	st  *store.Store
+	rec *control.RecordingState
 }
 
-func NewSessionHandler(st *store.Store) *SessionHandler {
-	return &SessionHandler{st: st}
+func NewSessionHandler(st *store.Store, rec *control.RecordingState) *SessionHandler {
+	return &SessionHandler{st: st, rec: rec}
 }
 
 type CreateSessionRequest struct {
@@ -103,9 +105,106 @@ func (h *SessionHandler) DeleteSession(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
 	}
 
+	active, _, activeSessionId := h.rec.Get()
+	if active && activeSessionId == sessionId {
+		h.rec.Stop()
+	}
+
 	if err := store.DeleteSession(h.st.DB, sessionId); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete session"})
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *SessionHandler) StartRecording(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+	sessionId := c.Params("sessionId")
+
+	s, err := store.GetSession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+	}
+	if s == nil || s.ProjectId != projectId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
+	}
+	if s.Sealed {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "cannot record: session is sealed"})
+	}
+
+	// for later, this will become a map once we support multpile sessions recording
+	h.rec.Start(projectId, sessionId)
+
+	return c.JSON(fiber.Map{
+		"recording":  true,
+		"project_id": projectId,
+		"session_id": sessionId,
+	})
+}
+
+func (h *SessionHandler) RecordingStatus(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+	sessionId := c.Params("sessionId")
+
+	s, err := store.GetSession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+	}
+	if s == nil || s.ProjectId != projectId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
+	}
+
+	active, activeProjectId, activeSessionId := h.rec.Get()
+	recording := active && activeProjectId == projectId && activeSessionId == sessionId
+	if !recording {
+		return c.JSON(fiber.Map{
+			"recording":  false,
+			"project_id": projectId,
+			"session_id": sessionId,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"recording":  true,
+		"project_id": projectId,
+		"session_id": sessionId,
+	})
+}
+
+func (h *SessionHandler) StopRecording(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+	sessionId := c.Params("sessionId")
+
+	// Validate the session exists and belongs to project, so stop is not ambiguous
+	s, err := store.GetSession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+	}
+	if s == nil || s.ProjectId != projectId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
+	}
+
+	active, activeProjectId, activeSessionId := h.rec.Get()
+	if !active {
+		return c.JSON(fiber.Map{
+			"recording": false,
+			"message":   "recording already stopped",
+		})
+	}
+
+	if activeProjectId != projectId || activeSessionId != sessionId {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error":             "another session is currently recording",
+			"active_project_id": activeProjectId,
+			"active_session_id": activeSessionId,
+		})
+	}
+
+	h.rec.Stop()
+
+	return c.JSON(fiber.Map{
+		"recording":  false,
+		"project_id": projectId,
+		"session_id": sessionId,
+	})
 }
