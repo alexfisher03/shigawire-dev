@@ -8,10 +8,13 @@ services:
       - ./docs:/app/docs:ro
       - ./data:/data
     ports:
-      - "8080:8080"
+      - "8083:8083"
+      - "9090:9090"
     environment:
-      - PORT=8080
+      - PORT=8083
       - DB_PATH=/data/shigawire.sqlite
+      - PROXY_PORT=9090
+      - DEFAULT_UPSTREAM_BASE_URL=http://host.docker.internal:8080
     command: sh -c "go mod download && go run ./cmd/server"
     restart: unless-stopped
 
@@ -27,8 +30,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
-      - BACKEND_INTERNAL_URL=http://backend:8080
-      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
+      - BACKEND_INTERNAL_URL=http://backend:8083
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8083
     command: sh -c "npm ci && npm run dev -- -H 0.0.0.0 -p 3000"
     depends_on:
       - backend
@@ -38,7 +41,7 @@ services:
     image: swaggerapi/swagger-ui:latest
     container_name: shigawire-swagger-ui
     ports:
-      - "8081:8080"
+      - "8081:8082"
     volumes:
       - ./docs:/usr/share/nginx/html/docs:ro
     environment:
