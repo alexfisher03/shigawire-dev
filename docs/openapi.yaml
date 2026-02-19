@@ -4,12 +4,157 @@ info:
   version: 1.0.0
   description: API for session capture, replay, and event streaming
 servers:
-  - url: http://localhost:8083
+  - url: http://localhost:8080/api/v1
     description: Local development server
 paths:
-  /api/sessions:
+  /projects:
     get:
-      summary: List all sessions
+      summary: List all projects
+      tags:
+        - Projects
+      responses:
+        "200":
+          description: A list of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: Create a new project
+      tags:
+        - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "200":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get a project by ID
+      tags:
+        - Projects
+      responses:
+        "200":
+          description: A project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      summary: Update a project by ID
+      tags:
+        - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "200":
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      summary: Delete a project by ID
+      tags:
+        - Projects
+      responses:
+        "200":
+          description: Project deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/sessions:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: List all sessions for a project
       tags:
         - Sessions
       responses:
@@ -21,19 +166,28 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Session"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: "#/components/schemas/Error"
     post:
-      summary: Create a new session
+      summary: Create a new session within a project
       tags:
         - Sessions
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionInput"
       responses:
         "200":
           description: Session created
@@ -46,20 +200,32 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-  /api/sessions/{id}:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/sessions/{sessionId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
     get:
       summary: Get a session by ID
       tags:
@@ -72,28 +238,196 @@ paths:
               schema:
                 $ref: "#/components/schemas/Session"
         "404":
-          description: Session not found
+          description: Session or project not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: "#/components/schemas/Error"
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-  /api/sessions/{id}/events:
+                $ref: "#/components/schemas/Error"
+    delete:
+      summary: Delete a session by ID
+      tags:
+        - Sessions
+      responses:
+        "200":
+          description: Session deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          description: Session or project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/sessions/{sessionId}/record/start:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Start recording events for a session
+      tags:
+        - Recording Control
+      responses:
+        "200":
+          description: Recording started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          description: Session or project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Recording already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/sessions/{sessionId}/record/stop:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Stop recording events for a session
+      tags:
+        - Recording Control
+      responses:
+        "200":
+          description: Recording stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          description: Session or project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Recording not in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/sessions/{sessionId}/record/status:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get recording status for a session
+      tags:
+        - Recording Control
+      responses:
+        "200":
+          description: Recording status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingStatus"
+        "404":
+          description: Session or project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /record/status:
+    get:
+      summary: Get global recording status
+      tags:
+        - Recording Control
+      responses:
+        "200":
+          description: Global recording status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingStatus"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/sessions/{sessionId}/events:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
     get:
       summary: List all events for a session
       tags:
-        - Sessions
+        - Events
       responses:
         "200":
           description: A list of events
@@ -104,108 +438,54 @@ paths:
                 items:
                   $ref: "#/components/schemas/Event"
         "404":
-          description: Session not found
+          description: Session or project not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: "#/components/schemas/Error"
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-  /api/sessions/{id}/capture/start:
+                $ref: "#/components/schemas/Error"
     post:
-      summary: Start capturing events for a session
+      summary: Seed an event into a session
       tags:
-        - Capture Control
+        - Events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
       responses:
         "200":
-          description: Capture started
+          description: Event seeded
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          description: Session not found
+          description: Session or project not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        "409":
-          description: Capture already started
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: "#/components/schemas/Error"
         "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-  /api/sessions/{id}/capture/stop:
-    post:
-      summary: Stop capturing events for a session
-      tags:
-        - Capture Control
-      responses:
-        "200":
-          description: Capture stopped
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-        "404":
-          description: Session not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        "409":
-          description: Capture not started
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-  /api/sessions/{id}/replay/start:
+                $ref: "#/components/schemas/Error"
+
+  /sessions/{id}/replay/start:
     post:
       summary: Start replaying a session
       tags:
@@ -371,17 +651,48 @@ paths:
                   error:
                     type: string
 
-components:
+  /swagger/{any}:
+    get:
+      summary: Swagger UI
+      tags:
+        - Docs
+      parameters:
+        - name: any
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Swagger UI HTML
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      summary: Get OpenAPI specification
+      tags:
+        - Docs
+      responses:
+        "200":
+          description: OpenAPI YAML spec
+          content:
+            application/yaml:
+              schema:
+                type: string
+
   tags:
+    - name: Projects
+      description: Manage projects.
     - name: Sessions
-      description: |
-        Manage and query session data. Sessions represent capture sessions
-        that contain recorded events.
-    - name: Capture Control
-      description: |
-        Control the capture process for sessions. Start and stop capturing
-        events for a specific session.
+      description: Manage and query sessions within a project.
+    - name: Recording Control
+      description: Start, stop, and query recording state for a session.
+    - name: Events
+      description: List and seed events within a session.
     - name: Replay Control
-      description: |
-        Control the replay process for sessions. Start and stop replaying
-        events for a specific session.
+      description: Control the replay process for sessions. Start and stop replaying  events for a specific session.
+    - name: Docs
+      description: API documentation endpoints.
