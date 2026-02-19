@@ -34,7 +34,15 @@ func (h *EventHandler) ListEvents(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list events"})
 	}
 
-	return c.JSON(events)
+	if c.Query("raw") == "1" {
+		return c.JSON(events)
+	}
+
+	out := make([]EventReadable, 0, len(events))
+	for _, e := range events {
+		out = append(out, toReadableEvent(e))
+	}
+	return c.JSON(out)
 }
 
 func (h *EventHandler) SeedEvent(c *fiber.Ctx) error {
