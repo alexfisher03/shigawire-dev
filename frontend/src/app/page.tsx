@@ -1,79 +1,116 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Header } from '@/components/header'
-import { Sidebar } from '@/components/sidebar'
-import { SessionList } from '@/components/session-list'
-import { ReplayView } from '@/components/replay-view'
-import { ProjectView } from '@/components/project-view'
-import { listProjects, Project } from '@/lib/api'
+import { useState, useEffect } from "react";
+import { Header } from "@/components/header";
+import { Sidebar } from "@/components/sidebar";
+import { SessionList } from "@/components/session-list";
+import { ReplayView } from "@/components/replay-view";
+import { ProjectView } from "@/components/project-view";
+import { listProjects, Project } from "@/lib/api";
 
 export default function Home() {
-  const [view, setView] = useState<'list' | 'replay'>('list')
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
-  const [replayProjectId, setReplayProjectId] = useState<string | null>(null)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [projects, setProjects] = useState<Project[]>([])
+  const [view, setView] = useState<"list" | "replay">("list");
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null,
+  );
+  const [replayProjectId, setReplayProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
+  );
+  const [projects, setProjects] = useState<Project[]>([]);
 
   // Load projects on mount
   useEffect(() => {
-    loadProjects()
-  }, [])
+    loadProjects();
+  }, []);
 
   async function loadProjects() {
-    const fetched = await listProjects()
-    setProjects(fetched)
+    const fetched = await listProjects();
+    setProjects(fetched);
   }
 
   const handleSessionSelect = (sessionId: string, projectId: string) => {
-    setSelectedSessionId(sessionId)
-    setReplayProjectId(projectId)
-    setView('replay')
-  }
+    setSelectedSessionId(sessionId);
+    setReplayProjectId(projectId);
+    setView("replay");
+  };
 
   const handleProjectSelect = (projectId: string | null) => {
-    setSelectedProjectId(projectId)
+    setSelectedProjectId(projectId);
     // Reset view to list when switching projects/global
-    setView('list')
-  }
+    setView("list");
+  };
 
   // Called when a new project is created via Sidebar
   const handleProjectCreated = (newProject: Project) => {
-    setProjects(prev => [newProject, ...prev])
-    handleProjectSelect(newProject.id)
-  }
+    setProjects((prev) => [newProject, ...prev]);
+    handleProjectSelect(newProject.id);
+  };
 
   // Called when ProjectView updates a project (rename)
   const handleProjectUpdated = (updatedProject: Project) => {
-    setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p))
-  }
+    setProjects((prev) =>
+      prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)),
+    );
+  };
 
-  // Called when a project is deleted
-  const handleProjectDeleted = (projectId: string) => {
-    setProjects(prev => prev.filter(p => p.id !== projectId))
+  const handleProjectDeleted = async (projectId: string) => {
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+
     if (selectedProjectId === projectId) {
-      setSelectedProjectId(null)
+      setSelectedProjectId(null);
+      setView("list");
     }
-  }
+
+    await loadProjects();
+  };
+
+  // bulk delete (used by Sidebar multi-select)
+  const handleProjectsDeleted = async (deletedIds: string[]) => {
+    setProjects((prev) => prev.filter((p) => !deletedIds.includes(p.id)));
+
+    if (selectedProjectId && deletedIds.includes(selectedProjectId)) {
+      setSelectedProjectId(null);
+      setView("list");
+    }
+
+    await loadProjects();
+  };
 
   // Determine main content based on state
   const renderContent = () => {
-    if (view === 'replay') {
-      return <ReplayView projectId={replayProjectId} sessionId={selectedSessionId} onBack={() => setView('list')} />
+    if (view === "replay") {
+      return (
+        <ReplayView
+          projectId={replayProjectId}
+          sessionId={selectedSessionId}
+          onBack={() => setView("list")}
+        />
+      );
     }
 
     if (selectedProjectId) {
-      return <ProjectView
-        projectId={selectedProjectId}
-        onSessionSelect={(sessionId) => handleSessionSelect(sessionId, selectedProjectId)}
-        onUpdateProject={handleProjectUpdated}
-        onDeleteProject={handleProjectDeleted}
-      />
+      return (
+        <ProjectView
+          projectId={selectedProjectId}
+          onSessionSelect={(sessionId) =>
+            handleSessionSelect(sessionId, selectedProjectId)
+          }
+          onUpdateProject={handleProjectUpdated}
+          onDeleteProject={handleProjectDeleted} // <- single
+        />
+      );
     }
 
     // Default: Global Session List (Aggregated)
-    return <SessionList onSessionSelect={(sessionId, projectId) => handleSessionSelect(sessionId, projectId)} />
-  }
+    return (
+      <SessionList
+        onSessionSelect={(sessionId, projectId) =>
+          handleSessionSelect(sessionId, projectId)
+        }
+      />
+    );
+  };
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
@@ -87,10 +124,11 @@ export default function Home() {
             selectedProjectId={selectedProjectId}
             onSelectProject={handleProjectSelect}
             onProjectCreated={handleProjectCreated}
+            onProjectsDeleted={handleProjectsDeleted}
           />
           {renderContent()}
         </div>
       </div>
     </div>
-  )
+  );
 }
