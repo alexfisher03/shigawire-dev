@@ -30,6 +30,8 @@ func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState
 	v1.Post("/projects/:projectId/sessions/:sessionId/record/stop", sh.StopRecording)
 	v1.Get("/projects/:projectId/sessions/:sessionId/record/status", sh.RecordingStatus)
 
+	v1.Get("/record/status", sh.GlobalRecordingStatus)
+
 	v1.Get("/projects/:projectId/sessions/:sessionId/events", eh.ListEvents)
 	v1.Post("/projects/:projectId/sessions/:sessionId/events", eh.SeedEvent)
 

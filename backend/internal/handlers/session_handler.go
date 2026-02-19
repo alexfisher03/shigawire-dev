@@ -23,6 +23,16 @@ type CreateSessionRequest struct {
 	Name string `json:"name"`
 }
 
+func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
+	active, projectId, sessionId := h.rec.Get()
+
+	return c.JSON(fiber.Map{
+		"recording":  active,
+		"project_id": projectId,
+		"session_id": sessionId,
+	})
+}
+
 func (h *SessionHandler) CreateSession(c *fiber.Ctx) error {
 	projectId := c.Params("projectId")
 
