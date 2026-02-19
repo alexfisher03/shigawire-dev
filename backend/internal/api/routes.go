@@ -14,6 +14,7 @@ func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState
 	ph := handlers.NewProjectHandler(st)
 	sh := handlers.NewSessionHandler(st, rec)
 	eh := handlers.NewEventHandler(st)
+	dh := handlers.NewDocsHandler(st)
 
 	v1.Post("/projects", ph.CreateProject)
 	v1.Get("/projects", ph.ListProjects)
@@ -35,6 +36,6 @@ func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState
 	v1.Get("/projects/:projectId/sessions/:sessionId/events", eh.ListEvents)
 	v1.Post("/projects/:projectId/sessions/:sessionId/events", eh.SeedEvent)
 
-	v1.Get("/swagger/*", handlers.GetSwaggerSpecification)
-	v1.Get("/openapi.yaml", handlers.GetOpenAPISpec)
+	v1.Get("/swagger/*", dh.GetSwaggerSpecification)
+	v1.Get("/openapi.yaml", dh.GetOpenAPISpec)
 }
