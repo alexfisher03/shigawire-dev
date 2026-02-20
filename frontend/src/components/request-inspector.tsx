@@ -1,9 +1,6 @@
-'use client'
+import React, { useState } from "react"
 
-import React from "react"
-
-import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, AlertCircle } from 'lucide-react'
 import { Event } from '@/lib/api'
 
 const getStatusText = (status?: number) => {
@@ -45,9 +42,9 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
                 <span className="text-blue-300 font-bold">{event.method}</span>{' '}
                 <span className="text-blue-400/70">{event.url}</span>
               </div>
-              {event.startedAt && (
+              {event.started_at && (
                 <div className="text-blue-400/70 text-xs mt-2">
-                  {new Date(event.startedAt).toLocaleString()}
+                  {new Date(event.started_at).toLocaleString()}
                 </div>
               )}
             </div>
@@ -70,6 +67,64 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
             </div>
           </Section>
 
+          {/* Request Headers */}
+          {event.req_headers && Object.keys(event.req_headers).length > 0 && (
+            <Section title="Request Headers">
+              <div className="space-y-1 text-xs font-mono">
+                {Object.entries(event.req_headers).map(([key, vals]) => (
+                  <div key={key} className="flex flex-col sm:flex-row sm:gap-2 border-b border-blue-900/30 pb-1 last:border-0 last:pb-0">
+                    <span className="text-blue-300 font-semibold min-w-32">{key}:</span>
+                    <span className="text-blue-400/80 break-all">{vals.join(', ')}</span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Request Body */}
+          {event.req_body && (
+            <Section title="Request Body">
+              {event.req_body_truncated && (
+                <div className="mb-2 text-xs text-yellow-500/80 flex items-center gap-1 bg-yellow-500/10 p-1.5 rounded border border-yellow-500/30">
+                  <AlertCircle className="w-3 h-3" />
+                  Body truncated
+                </div>
+              )}
+              <div className="text-xs font-mono max-h-64 overflow-y-auto bg-black/40 p-2 rounded border border-blue-900/50">
+                <pre className="text-blue-400/90 whitespace-pre-wrap break-words">{event.req_body}</pre>
+              </div>
+            </Section>
+          )}
+
+          {/* Response Headers */}
+          {event.resp_headers && Object.keys(event.resp_headers).length > 0 && (
+            <Section title="Response Headers">
+              <div className="space-y-1 text-xs font-mono">
+                {Object.entries(event.resp_headers).map(([key, vals]) => (
+                  <div key={key} className="flex flex-col sm:flex-row sm:gap-2 border-b border-blue-900/30 pb-1 last:border-0 last:pb-0">
+                    <span className="text-blue-300 font-semibold min-w-32">{key}:</span>
+                    <span className="text-blue-400/80 break-all">{vals.join(', ')}</span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Response Body */}
+          {event.resp_body && (
+            <Section title="Response Body">
+              {event.resp_body_truncated && (
+                <div className="mb-2 text-xs text-yellow-500/80 flex items-center gap-1 bg-yellow-500/10 p-1.5 rounded border border-yellow-500/30">
+                  <AlertCircle className="w-3 h-3" />
+                  Body truncated
+                </div>
+              )}
+              <div className="text-xs font-mono max-h-96 overflow-y-auto bg-black/40 p-2 rounded border border-blue-900/50">
+                <pre className="text-blue-400/90 whitespace-pre-wrap break-words">{event.resp_body}</pre>
+              </div>
+            </Section>
+          )}
+
           {/* Event Metadata */}
           <Section title="Metadata">
             <div className="space-y-2 text-xs font-mono">
@@ -77,10 +132,16 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
                 <span className="text-blue-300 font-semibold">Event ID:</span>{' '}
                 <span className="text-blue-400/70">{event.id}</span>
               </div>
-              {event.startedAt && (
+              {event.started_at && (
                 <div>
                   <span className="text-blue-300 font-semibold">Timestamp:</span>{' '}
-                  <span className="text-blue-400/70">{event.startedAt}</span>
+                  <span className="text-blue-400/70">{event.started_at}</span>
+                </div>
+              )}
+              {event.redaction_applied && (
+                <div>
+                  <span className="text-blue-300 font-semibold">Redacted Fields:</span>{' '}
+                  <span className="text-orange-400/80">{event.redaction_applied}</span>
                 </div>
               )}
             </div>

@@ -40,8 +40,8 @@ export function TimelinePlayer({
 }) {
   // Calculate relative timestamps from event timestamps
   const eventsWithTimestamps = events.map((event, index) => {
-    const timestamp = event.startedAt ? new Date(event.startedAt).getTime() : 0
-    const firstTimestamp = events[0]?.startedAt ? new Date(events[0].startedAt).getTime() : 0
+    const timestamp = event.started_at ? new Date(event.started_at).getTime() : 0
+    const firstTimestamp = events[0]?.started_at ? new Date(events[0].started_at).getTime() : 0
     return {
       ...event,
       relativeTimestamp: timestamp - firstTimestamp,
@@ -81,7 +81,7 @@ export function TimelinePlayer({
             >
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${getMethodColor(event.method)}`}>
+                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${getMethodColor(event.method || '')}`}>
                     {event.method}
                   </span>
                   <code className="text-xs text-blue-300/70 truncate font-mono">

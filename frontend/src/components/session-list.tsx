@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { ChevronRight, Lock, Plus } from 'lucide-react'
-import { createSession, getSessionEvents, listSessions, listAllSessions, Session } from '@/lib/api'
+import {
+  createSession,
+  getSessionEvents,
+  listSessions,
+  listAllSessions,
+  Session,
+  getGlobalRecordingStatus,
+  RecordingStatus
+} from '@/lib/api'
 
 interface SessionWithStats extends Session {
   requests: number
@@ -18,6 +26,7 @@ interface SessionListProps {
 export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
   const [sessions, setSessions] = useState<SessionWithStats[]>([])
   const [loading, setLoading] = useState(true)
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null)
 
   useEffect(() => {
     async function loadSessions() {
@@ -50,6 +59,20 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
 
     loadSessions()
   }, [projectId])
+
+  useEffect(() => {
+    async function checkRecordingState() {
+      const status = await getGlobalRecordingStatus()
+      setRecordingStatus(status)
+    }
+
+    // Initial check
+    checkRecordingState()
+
+    // Ping every 2 seconds
+    const interval = setInterval(checkRecordingState, 2000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleNewSession = async () => {
     if (!projectId) return // Cannot create session without a project context
@@ -104,9 +127,18 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
           </div>
         ) : (
           <div className="divide-y divide-blue-900/50">
-            {sessions.map((session) => (
-              <SessionRow key={session.id} session={session} onSelect={onSessionSelect} showProjectTag={!projectId} />
-            ))}
+            {sessions.map((session) => {
+              const isRecording = recordingStatus?.recording && recordingStatus.session_id === session.id
+              return (
+                <SessionRow
+                  key={session.id}
+                  session={session}
+                  onSelect={onSessionSelect}
+                  showProjectTag={!projectId}
+                  isRecording={isRecording}
+                />
+              )
+            })}
           </div>
         )}
       </div>
@@ -114,7 +146,17 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
   )
 }
 
-function SessionRow({ session, onSelect, showProjectTag }: { session: SessionWithStats; onSelect: (sessionId: string, projectId: string) => void; showProjectTag?: boolean }) {
+function SessionRow({
+  session,
+  onSelect,
+  showProjectTag,
+  isRecording
+}: {
+  session: SessionWithStats;
+  onSelect: (sessionId: string, projectId: string) => void;
+  showProjectTag?: boolean;
+  isRecording?: boolean;
+}) {
   const startTime = session.created_at ? new Date(session.created_at) : new Date()
 
   return (
@@ -137,7 +179,7 @@ function SessionRow({ session, onSelect, showProjectTag }: { session: SessionWit
                 <span>{session.redacted} redacted</span>
               </div>
             )}
-            {!session.sealed && (
+            {isRecording && (
               <span className="flex items-center gap-2 px-2 py-0.5 rounded border border-orange-500/50 bg-orange-500/20 text-orange-400 text-xs font-mono">
                 <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
                 Recording

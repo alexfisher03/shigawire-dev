@@ -4,7 +4,15 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, Play, Pause, RotateCcw, Trash2 } from 'lucide-react'
 import { TimelinePlayer } from './timeline-player'
 import { RequestInspector } from './request-inspector'
-import { Event, getSession, getSessionEvents, Session, deleteSession } from '@/lib/api'
+import {
+  Event,
+  getSession,
+  getSessionEvents,
+  Session,
+  deleteSession,
+  getGlobalRecordingStatus,
+  RecordingStatus
+} from '@/lib/api'
 import { ConfirmDialog } from './confirm-dialog'
 
 interface ReplayViewProps {
@@ -23,6 +31,7 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
   const [loading, setLoading] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null)
 
   useEffect(() => {
     if (!sessionId || !projectId) return
@@ -50,6 +59,31 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     loadSessionData()
   }, [sessionId, projectId])
 
+  // Hydrate recording status and new events
+  useEffect(() => {
+    if (!sessionId || !projectId) return
+
+    async function checkRecordingStateAndRefreshEvents() {
+      const status = await getGlobalRecordingStatus()
+      if (status) {
+        setRecordingStatus(status)
+        // If the active recording session exactly matches our session, refresh events
+        if (status.recording && status.session_id === sessionId && status.project_id === projectId) {
+          try {
+            const newEvents = await getSessionEvents(projectId, sessionId)
+            setEvents(newEvents)
+          } catch (error) {
+            console.error('Error hydrating events:', error)
+          }
+        }
+      }
+    }
+
+    // Ping every 2 seconds
+    const interval = setInterval(checkRecordingStateAndRefreshEvents, 2000)
+    return () => clearInterval(interval)
+  }, [sessionId, projectId])
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
@@ -71,8 +105,14 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
             <ChevronLeft className="w-4 h-4" />
             Back to Sessions
           </button>
-          <h2 className="text-lg font-mono font-semibold text-blue-200 tracking-wide">
+          <h2 className="text-lg font-mono font-semibold text-blue-200 tracking-wide flex items-center gap-2">
             {loading ? 'Loading...' : session?.name || 'Session'}
+            {recordingStatus?.recording && recordingStatus.session_id === sessionId && (
+              <span className="flex items-center gap-2 px-2 py-0.5 ml-2 rounded border border-orange-500/50 bg-orange-500/20 text-orange-400 text-xs font-mono">
+                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                Recording
+              </span>
+            )}
           </h2>
           {/* Delete Session */}
           <div className="w-32 flex justify-end">

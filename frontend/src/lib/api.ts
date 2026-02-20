@@ -25,19 +25,31 @@ export interface Session {
 
 export interface Event {
   id: string;
-  sessionId: string;
-  seq: number; // each event should have a place in a sequence
-  method: string;
-  url: string;
+  session_id: string;
+  seq: number;
+  method?: string;
+  url?: string;
   status?: number;
-  startedAt?: string; // RFC3339
-  endedAt?: string; // RFC3339
-  durationMs?: number; // not stored in the db, derived from start and end
-  reqHeaders?: Record<string, string> | string;
-  respHeaders?: Record<string, string> | string;
-  reqBody?: string;
-  respBody?: string;
-  redactionApplied?: string;
+  started_at?: string;
+  ended_at?: string;
+  durationMs?: number; // derived
+  req_headers?: Record<string, string[]>;
+  resp_headers?: Record<string, string[]>;
+  req_body?: string;
+  resp_body?: string;
+  req_body_encoding?: string;
+  resp_body_encoding?: string;
+  req_body_b64?: string;
+  resp_body_b64?: string;
+  req_body_truncated?: boolean;
+  resp_body_truncated?: boolean;
+  redaction_applied?: string;
+}
+
+export interface RecordingStatus {
+  recording: boolean;
+  project_id: string;
+  session_id: string;
 }
 
 // --- Project API ---
@@ -249,3 +261,18 @@ export async function deleteSession(projectId: string, sessionId: string): Promi
   }
 }
 
+// --- Capture Status ---
+
+export async function getGlobalRecordingStatus(): Promise<RecordingStatus | null> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/record/status`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching recording status:", error);
+    return null;
+  }
+}
