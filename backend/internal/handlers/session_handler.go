@@ -25,9 +25,65 @@ type CreateSessionRequest struct {
 
 func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
 	active, projectId, sessionId := h.rec.Get()
+	if !active {
+		return c.JSON(fiber.Map{
+			"recording":  false,
+			"project_id": "",
+			"session_id": "",
+		})
+	}
+
+	// malformed in-memory state
+	if projectId == "" || sessionId == "" {
+		h.rec.Stop()
+		return c.JSON(fiber.Map{
+			"recording":      false,
+			"project_id":     "",
+			"session_id":     "",
+			"state_repaired": true,
+			"message":        "recording state was invalid and has been reset",
+		})
+	}
+
+	s, err := store.GetSession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+	}
+	if s == nil {
+		h.rec.Stop()
+		return c.JSON(fiber.Map{
+			"recording":      false,
+			"project_id":     "",
+			"session_id":     "",
+			"state_repaired": true,
+			"message":        "active session not found; recording state reset",
+		})
+	}
+
+	// canonicalize project from session ownership
+	if s.ProjectId != projectId {
+		projectId = s.ProjectId
+		h.rec.Start(projectId, sessionId)
+	}
+
+	// ensure project still exists
+	p, err := store.GetProject(h.st.DB, projectId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get project"})
+	}
+	if p == nil {
+		h.rec.Stop()
+		return c.JSON(fiber.Map{
+			"recording":      false,
+			"project_id":     "",
+			"session_id":     "",
+			"state_repaired": true,
+			"message":        "active project not found; recording state reset",
+		})
+	}
 
 	return c.JSON(fiber.Map{
-		"recording":  active,
+		"recording":  true,
 		"project_id": projectId,
 		"session_id": sessionId,
 	})
@@ -143,7 +199,8 @@ func (h *SessionHandler) StartRecording(c *fiber.Ctx) error {
 	}
 
 	// for later, this will become a map once we support multpile sessions recording
-	h.rec.Start(projectId, sessionId)
+	h.rec.Start(s.ProjectId, sessionId)
+	projectId = s.ProjectId
 
 	return c.JSON(fiber.Map{
 		"recording":  true,
@@ -199,6 +256,18 @@ func (h *SessionHandler) StopRecording(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"recording": false,
 			"message":   "recording already stopped",
+		})
+	}
+
+	if activeSessionId == sessionId && activeProjectId != projectId {
+		// corrupted state: same session, wrong project id
+		h.rec.Stop()
+		return c.JSON(fiber.Map{
+			"recording":      false,
+			"project_id":     projectId,
+			"session_id":     sessionId,
+			"state_repaired": true,
+			"message":        "recording state repaired and stopped",
 		})
 	}
 

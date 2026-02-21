@@ -197,7 +197,8 @@ func (l *Listener) resolveUpstream(r *http.Request) (projectID, sessionID, upstr
 	if active {
 		cfg, cfgErr := l.loadProjectConfig(recProjectID)
 		if cfgErr != nil {
-			return "", "", "", false, cfgErr
+			l.Rec.Stop()
+			return "", "", "", false, fmt.Errorf("invalid recording state was reset: %w", cfgErr)
 		}
 		return recProjectID, recSessionID, cfg.UpstreamBaseUrl(), true, nil
 	}
