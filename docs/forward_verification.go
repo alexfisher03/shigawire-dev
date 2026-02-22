@@ -10,8 +10,8 @@ import (
 )
 
 const targetService = "http://localhost:8080"
-const shigawireBackend = "http://localhost:8083"
-const shigawireProxy = "http://localhost:9090"
+const shigawireBackend = "http://host.docker.internal:8083"
+const shigawireProxy = "http://host.docker.internal:9090"
 const projectTestName = "proxy-test-project"
 
 type Result struct {
