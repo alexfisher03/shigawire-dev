@@ -41,7 +41,7 @@ services:
     image: swaggerapi/swagger-ui:latest
     container_name: shigawire-swagger-ui
     ports:
-      - "8081:8082"
+      - "8081:8080"
     volumes:
       - ./docs:/usr/share/nginx/html/docs:ro
     environment:

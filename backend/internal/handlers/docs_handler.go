@@ -2,9 +2,19 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/shigawire-dev/internal/store"
 )
 
-func GetSwaggerSpecification(c *fiber.Ctx) error {
+type DocsHandler struct {
+	st *store.Store
+}
+
+func NewDocsHandler(st *store.Store) *DocsHandler {
+	return &DocsHandler{st: st}
+}
+
+func (h *DocsHandler) GetSwaggerSpecification(c *fiber.Ctx) error {
 	html := `
 				<!DOCTYPE html>
 				<html lang="en">
@@ -31,6 +41,6 @@ func GetSwaggerSpecification(c *fiber.Ctx) error {
 	return c.SendString(html)
 }
 
-func GetOpenAPISpec(c *fiber.Ctx) error {
+func (h *DocsHandler) GetOpenAPISpec(c *fiber.Ctx) error {
 	return c.SendFile("./docs/openapi.yaml")
 }
