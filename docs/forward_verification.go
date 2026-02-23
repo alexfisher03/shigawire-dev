@@ -33,11 +33,7 @@ type Session struct {
 }
 
 func printResult(r Result) {
-	status := "✅ PASS"
-	if !r.Success {
-		status = "❌ FAIL"
-	}
-	fmt.Printf("\n%s [%s] %s %s\n", status, r.Method, r.Endpoint, r.Name)
+	fmt.Printf("\n%s %s %s\n", r.Method, r.Endpoint, r.Name)
 	fmt.Printf("   Status: %d\n", r.StatusCode)
 	fmt.Printf("   Body:   %s\n", r.Body)
 }
@@ -83,10 +79,30 @@ func getSessionID(resTargetGet Result) string {
 	return session.ID
 }
 
+func responsesMatch(body1, body2 string, ignoreKeys []string) bool {
+	var m1, m2 map[string]interface{}
+	if err := json.Unmarshal([]byte(body1), &m1); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(body2), &m2); err != nil {
+		return false
+	}
+
+	for _, key := range ignoreKeys {
+		delete(m1, key)
+		delete(m2, key)
+	}
+
+	b1, _ := json.Marshal(m1)
+	b2, _ := json.Marshal(m2)
+	return string(b1) == string(b2)
+}
+
 func main() {
 	fmt.Println("Starting Verification Tests...")
 
 	resTargetGet := doRequest("Get Health", "GET", targetService+"/api/v1/health", nil, nil)
+	resTargetPostFail := doRequest("Upload File", "POST", targetService+"/api/v1/me/files/upload", nil, nil)
 	ts := time.Now().Unix()
 	accountBody, _ := json.Marshal(map[string]string{
 		"username": fmt.Sprintf("littleguy%d", ts),
@@ -95,12 +111,8 @@ func main() {
 	})
 	resTargetPost := doRequest("Create User", "POST", targetService+"/api/v1/users",
 		bytes.NewReader(accountBody), map[string]string{"Content-Type": "application/json"})
-	printResult(resTargetGet)
-	printResult(resTargetPost)
 
-	// time for shiga
 	projects := doRequest("List Projects", "GET", shigawireBackend+"/api/v1/projects", nil, nil)
-	printResult(projects)
 	projectID, found := getProjectIDByName(projects, projectTestName)
 	if !found {
 		projectBody, _ := json.Marshal(map[string]string{
@@ -111,15 +123,59 @@ func main() {
 	sessionBody, _ := json.Marshal(map[string]string{
 		"name": "Proxy Test Session",
 	})
+
 	session := doRequest("Create Session", "POST", shigawireBackend+"/api/v1/projects/"+projectID+"/sessions", bytes.NewReader(sessionBody), map[string]string{"Content-Type": "application/json"})
-	printResult(session)
 	resShigawireStart := doRequest("Proxy Start", "POST", shigawireBackend+"/api/v1/projects/"+projectID+"/sessions/"+getSessionID(session)+"/record/start", nil, nil)
 	printResult(resShigawireStart)
 
 	resShigawireProxyGet := doRequest("Get Health", "GET", shigawireProxy+"/api/v1/health", nil, nil)
-	printResult(resShigawireProxyGet)
-	if resShigawireProxyGet == resTargetGet {
-		fmt.Println("✅ Proxy GET request matches target service response")
+	resShigawireProxyPostFail := doRequest("Upload File", "POST", shigawireProxy+"/api/v1/me/files/upload", nil, nil)
+	// refreshing since db needs unique vals
+	accountBody, _ = json.Marshal(map[string]string{
+		"username": fmt.Sprintf("littleguys%d", ts),
+		"email":    fmt.Sprintf("littleguys%d@aperature.com", ts),
+		"password": "secret123",
+	})
+	// needs to wait until quietstore allows script to make a second request, otherwise responses won't match
+	time.Sleep(10 * time.Second)
+	resShigawireProxyPost := doRequest("Create User", "POST", shigawireProxy+"/api/v1/users",
+		bytes.NewReader(accountBody), map[string]string{"Content-Type": "application/json"})
+
+	// need to wait again
+	resShigawireProxyGetUsers := doRequest("List Users", "GET", shigawireProxy+"/api/v1/users", nil, nil)
+	resTargetGetUsers := doRequest("List Users", "GET", targetService+"/api/v1/users", nil, nil)
+
+	// comparison tests
+	getTestResult := responsesMatch(resShigawireProxyGet.Body, resTargetGet.Body, []string{"created_at", "updated_at", "timestamp"})
+	if getTestResult {
+		fmt.Println("\n✅ Proxy GET response matches target service GET response")
+	} else {
+		fmt.Println("\n❌ Proxy GET response does not match target service GET response")
+	}
+
+	if resShigawireProxyPostFail.StatusCode == resTargetPostFail.StatusCode {
+		fmt.Println("\n✅ Proxy POST failure response matches target service POST failure response")
+	} else {
+		fmt.Println("\n❌ Proxy POST failure response does not match target service POST failure response")
+		fmt.Println("\t\n-> Target POST Response:", resTargetPostFail.Body)
+		fmt.Println("\t\n-> Proxy POST Response:", resShigawireProxyPostFail.Body)
+	}
+
+	if resShigawireProxyPost.StatusCode == resTargetPost.StatusCode {
+		fmt.Println("\n✅ Proxy POST response matches target service POST response")
+	} else {
+		fmt.Println("\n❌ Proxy POST response does not match target service POST response")
+		fmt.Println("\t\n-> Target POST Response:", resTargetPost.Body)
+		fmt.Println("\t\n-> Proxy POST Response:", resShigawireProxyPost.Body)
+	}
+
+	getUsersTestResult := responsesMatch(resShigawireProxyGetUsers.Body, resTargetGetUsers.Body, []string{"created_at", "updated_at", "timestamp"})
+	if getUsersTestResult {
+		fmt.Println("\n✅ Proxy GET /users response matches target service GET /users response")
+	} else {
+		fmt.Println("\n❌ Proxy GET /users response does not match target service GET /users response")
+		fmt.Println("\t\n-> Target GET /users Response:", resTargetGetUsers.Body)
+		fmt.Println("\t\n-> Proxy GET /users Response:", resShigawireProxyGetUsers.Body)
 	}
 
 	fmt.Println("\nVerification Tests Completed.")
