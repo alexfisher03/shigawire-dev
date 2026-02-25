@@ -32,11 +32,13 @@ export function TimelinePlayer({
   selectedIndex,
   onSelectRequest,
   events = [],
+  headerControls,
 }: {
   isPlaying: boolean
   selectedIndex: number
   onSelectRequest: (index: number) => void
   events?: Event[]
+  headerControls?: React.ReactNode
 }) {
   // Calculate relative timestamps from event timestamps
   const eventsWithTimestamps = events.map((event, index) => {
@@ -54,18 +56,24 @@ export function TimelinePlayer({
 
   if (events.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-4">
-        <h3 className="text-sm font-mono font-semibold text-blue-200 mb-4 tracking-wide">Request Timeline</h3>
-        <div className="text-center text-blue-400/70 font-mono text-sm py-8">
-          No events recorded for this session
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-mono font-semibold text-blue-200 tracking-wide">Request Timeline</h3>
+          {headerControls}
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-blue-400/70 font-mono text-sm py-8">No events recorded for this session</span>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <h3 className="text-sm font-mono font-semibold text-blue-200 mb-4 tracking-wide">Request Timeline</h3>
+    <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-mono font-semibold text-blue-200 tracking-wide">Request Timeline</h3>
+        {headerControls}
+      </div>
       <div className="space-y-2">
         {eventsWithTimestamps.map((event, index) => {
           const isSelected = selectedIndex === index
