@@ -23,6 +23,14 @@ func InitSchema(db *sql.DB) error {
 			FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
 		);`,
 
+		`CREATE TABLE IF NOT EXISTS active_recording(
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			project_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+			FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+		);`,
+
 		`CREATE TABLE IF NOT EXISTS events(
 			id TEXT PRIMARY KEY,
 			session_id TEXT NOT NULL,
