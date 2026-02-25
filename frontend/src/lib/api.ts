@@ -276,3 +276,37 @@ export async function getGlobalRecordingStatus(): Promise<RecordingStatus | null
     return null;
   }
 }
+
+export async function startRecording(projectId: string, sessionId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/record/start`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      console.error("Failed to start recording:", response.statusText);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error starting recording:", error);
+    return false;
+  }
+}
+
+export async function stopRecording(projectId: string, sessionId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/record/stop`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      console.error("Failed to stop recording:", response.statusText);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error stopping recording:", error);
+    return false;
+  }
+}
