@@ -35,7 +35,9 @@ func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
 
 	// malformed in-memory state
 	if projectId == "" || sessionId == "" {
-		h.rec.Stop()
+		if err := h.rec.Stop(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+		}
 		return c.JSON(fiber.Map{
 			"recording":      false,
 			"project_id":     "",
@@ -50,7 +52,9 @@ func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
 	}
 	if s == nil {
-		h.rec.Stop()
+		if err := h.rec.Stop(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+		}
 		return c.JSON(fiber.Map{
 			"recording":      false,
 			"project_id":     "",
@@ -63,7 +67,9 @@ func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
 	// canonicalize project from session ownership
 	if s.ProjectId != projectId {
 		projectId = s.ProjectId
-		h.rec.Start(projectId, sessionId)
+		if err := h.rec.Start(projectId, sessionId); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to start recording state"})
+		}
 	}
 
 	// ensure project still exists
@@ -72,7 +78,9 @@ func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get project"})
 	}
 	if p == nil {
-		h.rec.Stop()
+		if err := h.rec.Stop(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+		}
 		return c.JSON(fiber.Map{
 			"recording":      false,
 			"project_id":     "",
@@ -173,7 +181,9 @@ func (h *SessionHandler) DeleteSession(c *fiber.Ctx) error {
 
 	active, _, activeSessionId := h.rec.Get()
 	if active && activeSessionId == sessionId {
-		h.rec.Stop()
+		if err := h.rec.Stop(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+		}
 	}
 
 	if err := store.DeleteSession(h.st.DB, sessionId); err != nil {
@@ -199,7 +209,9 @@ func (h *SessionHandler) StartRecording(c *fiber.Ctx) error {
 	}
 
 	// for later, this will become a map once we support multpile sessions recording
-	h.rec.Start(s.ProjectId, sessionId)
+	if err := h.rec.Start(s.ProjectId, sessionId); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to start recording"})
+	}
 	projectId = s.ProjectId
 
 	return c.JSON(fiber.Map{
@@ -261,7 +273,9 @@ func (h *SessionHandler) StopRecording(c *fiber.Ctx) error {
 
 	if activeSessionId == sessionId && activeProjectId != projectId {
 		// corrupted state: same session, wrong project id
-		h.rec.Stop()
+		if err := h.rec.Stop(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+		}
 		return c.JSON(fiber.Map{
 			"recording":      false,
 			"project_id":     projectId,
@@ -279,7 +293,9 @@ func (h *SessionHandler) StopRecording(c *fiber.Ctx) error {
 		})
 	}
 
-	h.rec.Stop()
+	if err := h.rec.Stop(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+	}
 
 	return c.JSON(fiber.Map{
 		"recording":  false,

@@ -41,7 +41,10 @@ func main() {
 		}
 	}()
 
-	rec := control.NewRecordingState()
+	rec, err := control.NewRecordingState(store.DB)
+	if err != nil {
+		log.Fatal("failed to initialize recording state: %w", err)
+	}
 
 	api.RegisterRoutes(app, store, rec)
 
