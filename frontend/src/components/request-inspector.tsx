@@ -13,6 +13,8 @@ const getStatusText = (status?: number) => {
 
 export function RequestInspector({ requestIndex, events = [] }: { requestIndex: number; events?: Event[] }) {
   const event = events[requestIndex] || null
+  if(event && event.started_at && event.ended_at)
+    event.durationMs = new Date(event.ended_at).getTime() - new Date(event.started_at).getTime()
 
   if (!event) {
     return (

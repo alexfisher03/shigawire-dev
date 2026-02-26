@@ -44,11 +44,15 @@ export function TimelinePlayer({
   const eventsWithTimestamps = events.map((event, index) => {
     const timestamp = event.started_at ? new Date(event.started_at).getTime() : 0
     const firstTimestamp = events[0]?.started_at ? new Date(events[0].started_at).getTime() : 0
+    if(event && event.started_at && event.ended_at)
+      event.durationMs = new Date(event.ended_at).getTime() - new Date(event.started_at).getTime()
     return {
       ...event,
       relativeTimestamp: timestamp - firstTimestamp,
     }
   })
+
+  const firstTimestamp = events[0]?.started_at ? new Date(events[0].started_at).getTime() : 0
 
   const maxTimestamp = eventsWithTimestamps.length > 0
     ? Math.max(...eventsWithTimestamps.map((e) => e.relativeTimestamp + (e.durationMs || 0)))
@@ -112,7 +116,7 @@ export function TimelinePlayer({
                   <div className="h-1.5 bg-blue-900/50 rounded overflow-hidden">
                     <div
                       className="h-full bg-blue-500/60"
-                      style={{ width: `${Math.min((event.durationMs / maxTimestamp) * 100, 100)}%` }}
+                      style={{ width: `${Math.min(((event.durationMs + event.relativeTimestamp) / maxTimestamp * 100), 100)}%` }}
                     />
                   </div>
                 )}
