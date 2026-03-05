@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shigawire-dev/internal/control"
 	"github.com/shigawire-dev/internal/models"
+	"github.com/shigawire-dev/internal/redaction"
 	"github.com/shigawire-dev/internal/store"
 )
 
@@ -250,6 +251,21 @@ func (l *Listener) persistEvent(
 		return
 	}
 
+	sanitizedReqHeaders, reqRules := redaction.SanitizeHeaders(req.Header, redaction.DefaultPolicy)
+	sanitizedRespHeaders, respRules := redaction.SanitizeHeaders(respHeaders, redaction.DefaultPolicy)
+
+	var allRules []string
+	allRules = append(allRules, reqRules...)
+	allRules = append(allRules, respRules...)
+
+	finalNote := redactionNote
+	if len(allRules) > 0 {
+		if finalNote != "" {
+			finalNote += "; "
+		}
+		finalNote += strings.Join(allRules, ", ")
+	}
+
 	e := &models.Event{
 		Id:               "event_" + uuid.NewString(),
 		SessionId:        sessionID,
@@ -258,11 +274,11 @@ func (l *Listener) persistEvent(
 		Method:           req.Method,
 		URL:              req.URL.RequestURI(),
 		Status:           statusCode,
-		ReqHeaders:       marshalHeaders(req.Header),
-		RespHeaders:      marshalHeaders(respHeaders),
+		ReqHeaders:       marshalHeaders(sanitizedReqHeaders),
+		RespHeaders:      marshalHeaders(sanitizedRespHeaders),
 		ReqBody:          truncateBytes(reqBody, maxCapturedBodyBytes),
 		RespBody:         truncateBytes(respBody, maxCapturedBodyBytes),
-		RedactionApplied: redactionNote,
+		RedactionApplied: finalNote,
 	}
 
 	if err := store.InsertEvent(l.DB, e); err != nil {
