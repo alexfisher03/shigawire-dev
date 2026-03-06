@@ -368,8 +368,9 @@ func sanitizeBodyForStorage(contentType string, body []byte, direction string) (
 		return body, nil
 	}
 
-	if !isJSONContentType(contentType) {
-		return body, nil
+	body, shouldStore := captureDecisionGate(body, contentType)
+	if !shouldStore {
+		return body, []string{fmt.Sprintf("%s_body_capture_skipped", direction)}
 	}
 
 	sanitized, applied, err := redaction.SanitizeJSON(body)
@@ -378,6 +379,16 @@ func sanitizeBodyForStorage(contentType string, body []byte, direction string) (
 	}
 
 	return sanitized, applied
+}
+
+func captureDecisionGate(body []byte, contentType string) ([]byte, bool) {
+	if !isJSONContentType(contentType) {
+		return []byte("Body not stored; non-JSON content type"), false
+	}
+	if len(body) > maxCapturedBodyBytes {
+		return []byte("Body not stored; too large to capture"), false
+	}
+	return body, true
 }
 
 func isJSONContentType(contentType string) bool {
