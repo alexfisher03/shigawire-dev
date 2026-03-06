@@ -52,6 +52,9 @@ export interface RecordingStatus {
   session_id: string;
 }
 
+const UI_REDACTED_VALUE = "[REDACTED]";
+const UI_SENSITIVE_JSON_KEYS = new Set(["password", "token", "secret"]);
+
 // --- Project API ---
 
 export async function listProjects(): Promise<Project[]> {
@@ -215,11 +218,54 @@ export async function getSessionEvents(projectId: string, sessionId: string): Pr
     }
 
     const data = await response.json();
-    return data || [];
+    const events = (data || []) as Event[];
+    return events.map(redactEventBodiesForDisplay);
   } catch (error) {
     console.error("Error fetching events:", error);
     return [];
   }
+}
+
+function redactEventBodiesForDisplay(event: Event): Event {
+  return {
+    ...event,
+    req_body: redactJSONTextIfPossible(event.req_body),
+    resp_body: redactJSONTextIfPossible(event.resp_body),
+  };
+}
+
+function redactJSONTextIfPossible(body?: string): string | undefined {
+  if (!body) return body;
+
+  try {
+    const parsed = JSON.parse(body);
+    const sanitized = redactJSONValue(parsed);
+    return JSON.stringify(sanitized, null, 2);
+  } catch {
+    // Keep non-JSON payloads unchanged in the UI.
+    return body;
+  }
+}
+
+function redactJSONValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(redactJSONValue);
+  }
+
+  if (value && typeof value === "object") {
+    const input = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+    for (const key of Object.keys(input)) {
+      if (UI_SENSITIVE_JSON_KEYS.has(key.toLowerCase())) {
+        output[key] = UI_REDACTED_VALUE;
+        continue;
+      }
+      output[key] = redactJSONValue(input[key]);
+    }
+    return output;
+  }
+
+  return value;
 }
 
 export async function createSession(projectId: string, name: string): Promise<Session | null> {

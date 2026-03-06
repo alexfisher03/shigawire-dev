@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -253,10 +254,18 @@ func (l *Listener) persistEvent(
 
 	sanitizedReqHeaders, reqRules := redaction.SanitizeHeaders(req.Header, redaction.DefaultPolicy)
 	sanitizedRespHeaders, respRules := redaction.SanitizeHeaders(respHeaders, redaction.DefaultPolicy)
+	sanitizedReqBody, reqBodyRules := sanitizeBodyForStorage(req.Header.Get("Content-Type"), reqBody, "req")
+	respContentType := ""
+	if respHeaders != nil {
+		respContentType = respHeaders.Get("Content-Type")
+	}
+	sanitizedRespBody, respBodyRules := sanitizeBodyForStorage(respContentType, respBody, "resp")
 
 	var allRules []string
 	allRules = append(allRules, reqRules...)
 	allRules = append(allRules, respRules...)
+	allRules = append(allRules, reqBodyRules...)
+	allRules = append(allRules, respBodyRules...)
 
 	finalNote := redactionNote
 	if len(allRules) > 0 {
@@ -276,8 +285,8 @@ func (l *Listener) persistEvent(
 		Status:           statusCode,
 		ReqHeaders:       marshalHeaders(sanitizedReqHeaders),
 		RespHeaders:      marshalHeaders(sanitizedRespHeaders),
-		ReqBody:          truncateBytes(reqBody, maxCapturedBodyBytes),
-		RespBody:         truncateBytes(respBody, maxCapturedBodyBytes),
+		ReqBody:          truncateBytes(sanitizedReqBody, maxCapturedBodyBytes),
+		RespBody:         truncateBytes(sanitizedRespBody, maxCapturedBodyBytes),
 		RedactionApplied: finalNote,
 	}
 
@@ -352,6 +361,40 @@ func truncateBytes(b []byte, limit int) []byte {
 	cp := make([]byte, limit)
 	copy(cp, b[:limit])
 	return cp
+}
+
+func sanitizeBodyForStorage(contentType string, body []byte, direction string) ([]byte, []string) {
+	if len(body) == 0 {
+		return body, nil
+	}
+
+	if !isJSONContentType(contentType) {
+		return body, nil
+	}
+
+	sanitized, applied, err := redaction.SanitizeJSON(body)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("json:%s_body_parse_failed_dropped", direction)}
+	}
+
+	return sanitized, applied
+}
+
+func isJSONContentType(contentType string) bool {
+	trimmed := strings.TrimSpace(contentType)
+	if trimmed == "" {
+		return false
+	}
+
+	mediaType, _, err := mime.ParseMediaType(trimmed)
+	if err != nil {
+		// Fall back to best-effort parse for non-compliant values.
+		parts := strings.SplitN(trimmed, ";", 2)
+		mediaType = strings.TrimSpace(parts[0])
+	}
+
+	mediaType = strings.ToLower(mediaType)
+	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
