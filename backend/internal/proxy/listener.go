@@ -285,8 +285,8 @@ func (l *Listener) persistEvent(
 		Status:           statusCode,
 		ReqHeaders:       marshalHeaders(sanitizedReqHeaders),
 		RespHeaders:      marshalHeaders(sanitizedRespHeaders),
-		ReqBody:          truncateBytes(sanitizedReqBody, maxCapturedBodyBytes),
-		RespBody:         truncateBytes(sanitizedRespBody, maxCapturedBodyBytes),
+		ReqBody:          truncateString(sanitizedReqBody, maxCapturedBodyBytes),
+		RespBody:         truncateString(sanitizedRespBody, maxCapturedBodyBytes),
 		RedactionApplied: finalNote,
 	}
 
@@ -354,41 +354,38 @@ func marshalHeaders(h http.Header) string {
 	return string(b)
 }
 
-func truncateBytes(b []byte, limit int) []byte {
+func truncateString(b string, limit int) string {
 	if len(b) <= limit {
 		return b
 	}
-	cp := make([]byte, limit)
-	copy(cp, b[:limit])
-	return cp
+	return b[:limit]
 }
 
-func sanitizeBodyForStorage(contentType string, body []byte, direction string) ([]byte, []string) {
+func sanitizeBodyForStorage(contentType string, body []byte, direction string) (string, []string) {
 	if len(body) == 0 {
-		return body, nil
+		return "", nil
 	}
 
-	body, shouldStore := captureDecisionGate(body, contentType)
-	if !shouldStore {
-		return body, []string{fmt.Sprintf("%s_body_capture_skipped", direction)}
+	if !captureDecisionGate(body, contentType) {
+		return "", []string{fmt.Sprintf("%s_body_capture_skipped", direction)}
 	}
 
 	sanitized, applied, err := redaction.SanitizeJSON(body)
 	if err != nil {
-		return nil, []string{fmt.Sprintf("json:%s_body_parse_failed_dropped", direction)}
+		return "", []string{fmt.Sprintf("json:%s_body_parse_failed_dropped", direction)}
 	}
 
-	return sanitized, applied
+	return string(sanitized), applied
 }
 
-func captureDecisionGate(body []byte, contentType string) ([]byte, bool) {
+func captureDecisionGate(body []byte, contentType string) bool {
 	if !isJSONContentType(contentType) {
-		return []byte("Body not stored; non-JSON content type"), false
+		return false
 	}
 	if len(body) > maxCapturedBodyBytes {
-		return []byte("Body not stored; too large to capture"), false
+		return false
 	}
-	return body, true
+	return true
 }
 
 func isJSONContentType(contentType string) bool {

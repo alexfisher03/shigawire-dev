@@ -42,8 +42,8 @@ func InitSchema(db *sql.DB) error {
 			status INTEGER,
 			req_headers TEXT,
 			resp_headers TEXT,
-			req_body BLOB,
-			resp_body BLOB,
+			req_body TEXT,
+			resp_body TEXT,
 			redaction_applied TEXT,
 			FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
 			UNIQUE(session_id, seq)
