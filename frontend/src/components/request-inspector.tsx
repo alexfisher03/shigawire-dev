@@ -11,9 +11,30 @@ const getStatusText = (status?: number) => {
   return 'Server Error'
 }
 
+const formatBody = (body: string) => {
+  if (!body) return ''
+  try {
+    const parsed = JSON.parse(body)
+    return JSON.stringify(parsed, null, 2)
+  } catch (e) {
+    return body
+  }
+}
+
+const parseRedactionApplied = (val: string): string[] => {
+  if (!val) return []
+  try {
+    const parsed = JSON.parse(val)
+    if (Array.isArray(parsed)) return parsed.map(String)
+    return [val]
+  } catch (e) {
+    return val.split(',').map(s => s.trim()).filter(Boolean)
+  }
+}
+
 export function RequestInspector({ requestIndex, events = [] }: { requestIndex: number; events?: Event[] }) {
   const event = events[requestIndex] || null
-  if(event && event.started_at && event.ended_at)
+  if (event && event.started_at && event.ended_at)
     event.durationMs = new Date(event.ended_at).getTime() - new Date(event.started_at).getTime()
 
   if (!event) {
@@ -93,7 +114,7 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
                 </div>
               )}
               <div className="text-xs font-mono max-h-64 overflow-y-auto bg-black/40 p-2 rounded border border-blue-900/50">
-                <pre className="text-blue-400/90 whitespace-pre-wrap break-words">{event.req_body}</pre>
+                <pre className="text-blue-400/90 whitespace-pre-wrap break-words">{formatBody(event.req_body)}</pre>
               </div>
             </Section>
           )}
@@ -122,7 +143,7 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
                 </div>
               )}
               <div className="text-xs font-mono max-h-96 overflow-y-auto bg-black/40 p-2 rounded border border-blue-900/50">
-                <pre className="text-blue-400/90 whitespace-pre-wrap break-words">{event.resp_body}</pre>
+                <pre className="text-blue-400/90 whitespace-pre-wrap break-words">{formatBody(event.resp_body)}</pre>
               </div>
             </Section>
           )}
@@ -142,8 +163,14 @@ export function RequestInspector({ requestIndex, events = [] }: { requestIndex: 
               )}
               {event.redaction_applied && (
                 <div>
-                  <span className="text-blue-300 font-semibold">Redacted Fields:</span>{' '}
-                  <span className="text-orange-400/80">{event.redaction_applied}</span>
+                  <span className="text-blue-300 font-semibold">Redacted Fields:</span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {parseRedactionApplied(event.redaction_applied).map((rule, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/30 text-orange-400/90 text-[10px] break-all">
+                        {rule}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
