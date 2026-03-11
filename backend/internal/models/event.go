@@ -11,7 +11,7 @@ type Event struct {
 	Status           int    `json:"status,omitempty"`
 	ReqHeaders       string `json:"req_headers,omitempty"`
 	RespHeaders      string `json:"resp_headers,omitempty"`
-	ReqBody          []byte `json:"req_body,omitempty"`
-	RespBody         []byte `json:"resp_body,omitempty"`
+	ReqBody          string `json:"req_body,omitempty"`
+	RespBody         string `json:"resp_body,omitempty"`
 	RedactionApplied string `json:"redaction_applied,omitempty"`
 }

@@ -7,7 +7,6 @@ import (
 	"mime"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/shigawire-dev/internal/models"
 )
@@ -77,39 +76,25 @@ func parseStoredHeaders(raw string) map[string][]string {
 	return out
 }
 
-func decodeBodyForDisplay(body []byte, headers map[string][]string) (display string, encoding string, b64 string) {
-	if len(body) == 0 {
+func decodeBodyForDisplay(body string, headers map[string][]string) (display string, encoding string, b64 string) {
+	if body == "" {
 		return "", "empty", ""
 	}
 
-	b64 = base64.StdEncoding.EncodeToString(body)
+	b64 = base64.StdEncoding.EncodeToString([]byte(body))
 
 	ct := firstHeader(headers, "Content-Type")
 	mediaType, _, _ := mime.ParseMediaType(ct)
 	mediaType = strings.ToLower(mediaType)
 
-	if isTextual(mediaType) && utf8.Valid(body) {
-		if strings.Contains(mediaType, "json") {
-			var pretty bytes.Buffer
-			if json.Indent(&pretty, body, "", "  ") == nil {
-				return pretty.String(), "json", b64
-			}
+	if strings.Contains(mediaType, "json") {
+		var pretty bytes.Buffer
+		if json.Indent(&pretty, []byte(body), "", "  ") == nil {
+			return pretty.String(), "json", b64
 		}
-		return string(body), "text", b64
 	}
+	return body, "text", b64
 
-	return "", "base64", b64
-}
-
-func isTextual(mediaType string) bool {
-	if strings.HasPrefix(mediaType, "text/") {
-		return true
-	}
-	switch mediaType {
-	case "application/json", "application/xml", "application/x-www-form-urlencoded":
-		return true
-	}
-	return strings.HasSuffix(mediaType, "+json") || strings.HasSuffix(mediaType, "+xml")
 }
 
 func firstHeader(h map[string][]string, key string) string {
@@ -126,7 +111,7 @@ func firstHeader(h map[string][]string, key string) string {
 	return ""
 }
 
-func isTruncated(body []byte, headers map[string][]string) bool {
+func isTruncated(body string, headers map[string][]string) bool {
 	clRaw := strings.TrimSpace(firstHeader(headers, "Content-Length"))
 	if clRaw == "" {
 		return false
