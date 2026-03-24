@@ -179,6 +179,12 @@ function SessionRow({
                 <span>{session.redacted} redacted</span>
               </div>
             )}
+            {session.sealed && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded border border-slate-500/50 bg-slate-500/15 text-slate-300 text-xs font-mono whitespace-nowrap">
+                <Lock className="w-3 h-3" />
+                Sealed
+              </span>
+            )}
             {isRecording && (
               <span className="flex items-center gap-2 px-2 py-0.5 rounded border border-orange-500/50 bg-orange-500/20 text-orange-400 text-xs font-mono">
                 <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />

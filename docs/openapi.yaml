@@ -357,6 +357,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /projects/{projectId}/sessions/{sessionId}/capture/stop:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Stop capture and seal the session
+      tags:
+        - Recording Control
+      responses:
+        "200":
+          description: Capture stopped and session sealed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          description: Session or project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /projects/{projectId}/sessions/{sessionId}/record/status:
     parameters:
       - name: projectId

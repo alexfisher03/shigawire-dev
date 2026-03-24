@@ -252,6 +252,11 @@ func (l *Listener) persistEvent(
 		return
 	}
 
+	s, err := store.GetSession(l.DB, sessionID)
+	if err != nil || s == nil || s.Sealed {
+		return
+	}
+
 	sanitizedReqHeaders, reqRules := redaction.SanitizeHeaders(req.Header, redaction.DefaultPolicy)
 	sanitizedRespHeaders, respRules := redaction.SanitizeHeaders(respHeaders, redaction.DefaultPolicy)
 	sanitizedReqBody, reqBodyRules := sanitizeBodyForStorage(req.Header.Get("Content-Type"), reqBody, "req")

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, Play, Pause, RotateCcw, Trash2, Circle, Square } from 'lucide-react'
+import { ChevronLeft, Play, Pause, RotateCcw, Trash2, Lock, Square } from 'lucide-react'
 import { TimelinePlayer } from './timeline-player'
 import { RequestInspector } from './request-inspector'
 import {
@@ -95,8 +95,14 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
   const totalDuration = events.reduce((acc, e) => acc + (e.durationMs || 0), 0)
   const currentTime = 0 // TODO: Calculate based on playback position
 
+  const isSealed = session?.sealed === true
+  const isRecordingThisSession =
+    recordingStatus?.recording &&
+    recordingStatus.session_id === sessionId &&
+    recordingStatus.project_id === projectId
+
   const handleStartRecording = async () => {
-    if (!projectId || !sessionId) return;
+    if (!projectId || !sessionId || isSealed) return;
 
     // Check global recording status
     const status = await getGlobalRecordingStatus();
@@ -140,8 +146,14 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
             <ChevronLeft className="w-4 h-4" />
             Back to Sessions
           </button>
-          <h2 className="text-lg font-mono font-semibold text-blue-200 tracking-wide flex items-center gap-2">
+          <h2 className="text-lg font-mono font-semibold text-blue-200 tracking-wide flex items-center gap-2 flex-wrap">
             {loading ? 'Loading...' : session?.name || 'Session'}
+            {isSealed && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded border border-slate-500/50 bg-slate-500/15 text-slate-300 text-xs font-mono">
+                <Lock className="w-3 h-3" />
+                Sealed
+              </span>
+            )}
             {recordingStatus?.recording && recordingStatus.session_id === sessionId && (
               <span className="flex items-center gap-2 px-2 py-0.5 ml-2 rounded border border-orange-500/50 bg-orange-500/20 text-orange-400 text-xs font-mono">
                 <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
@@ -165,7 +177,7 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
       <div className="border-b border-blue-900/50 bg-black/60 p-4 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {recordingStatus?.recording && recordingStatus.session_id === sessionId ? (
+            {isRecordingThisSession ? (
               <button
                 onClick={handleStopRecording}
                 className="flex items-center gap-2 px-3 py-1.5 hover:bg-orange-500/20 border border-orange-500/30 rounded transition-colors text-orange-400/80 hover:text-orange-300 cursor-pointer text-sm font-mono"
@@ -176,9 +188,15 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
               </button>
             ) : (
               <button
+                type="button"
+                disabled={isSealed}
                 onClick={handleStartRecording}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-500/20 border border-blue-500/30 rounded transition-colors text-blue-400/80 hover:text-blue-300 cursor-pointer text-sm font-mono"
-                title="Start Recording"
+                className={
+                  isSealed
+                    ? 'flex items-center gap-2 px-3 py-1.5 rounded border border-blue-500/15 text-blue-400/35 cursor-not-allowed text-sm font-mono'
+                    : 'flex items-center gap-2 px-3 py-1.5 hover:bg-blue-500/20 border border-blue-500/30 rounded transition-colors text-blue-400/80 hover:text-blue-300 cursor-pointer text-sm font-mono'
+                }
+                title={isSealed ? 'Session is sealed; recording is disabled' : 'Start Recording'}
               >
                 <Play className="w-4 h-4" />
                 Start Recording

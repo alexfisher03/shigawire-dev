@@ -56,6 +56,9 @@ func (h *EventHandler) SeedEvent(c *fiber.Ctx) error {
 	if s == nil || s.ProjectId != projectId {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
 	}
+	if s.Sealed {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "cannot add events: session is sealed"})
+	}
 
 	var maxSeq sql.NullInt64
 	err = h.st.DB.QueryRow(

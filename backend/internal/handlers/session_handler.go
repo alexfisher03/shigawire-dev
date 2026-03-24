@@ -303,3 +303,39 @@ func (h *SessionHandler) StopRecording(c *fiber.Ctx) error {
 		"session_id": sessionId,
 	})
 }
+
+func (h *SessionHandler) StopCapture(c *fiber.Ctx) error {
+	projectId := c.Params("projectId")
+	sessionId := c.Params("sessionId")
+
+	s, err := store.GetSession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+	}
+	if s == nil || s.ProjectId != projectId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
+	}
+
+	if s.Sealed {
+		return c.JSON(fiber.Map{
+			"sealed":    true,
+			"recording": false,
+		})
+	}
+
+	active, _, activeSessionId := h.rec.Get()
+	if active && activeSessionId == sessionId {
+		if err := h.rec.Stop(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+		}
+	}
+
+	if err := store.SealSession(h.st.DB, sessionId); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to seal session"})
+	}
+
+	return c.JSON(fiber.Map{
+		"sealed":    true,
+		"recording": false,
+	})
+}
