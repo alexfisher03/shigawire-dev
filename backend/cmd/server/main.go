@@ -14,6 +14,7 @@ import (
 	api "github.com/shigawire-dev/internal/api"
 	control "github.com/shigawire-dev/internal/control"
 	"github.com/shigawire-dev/internal/proxy"
+	"github.com/shigawire-dev/internal/replay"
 	"github.com/shigawire-dev/internal/store"
 )
 
@@ -46,7 +47,8 @@ func main() {
 		log.Fatal("failed to initialize recording state: %w", err)
 	}
 
-	api.RegisterRoutes(app, store, rec)
+	rep := replay.NewReplayState()
+	api.RegisterRoutes(app, store, rec, rep)
 
 	proxyListener := proxy.NewListenerFromEnv(store.DB, rec)
 	ctx, cancel := context.WithCancel(context.Background())
