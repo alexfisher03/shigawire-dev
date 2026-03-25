@@ -48,12 +48,84 @@ func (h *ReplayHandler) StartReplay(c *fiber.Ctx) error {
 		speed = 1.0
 	}
 
+	events, err := store.ListEventsBySession(h.st.DB, sessionId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load events"})
+	}
+
 	replayId := "replay_" + uuid.NewString()
 	h.rep.Start(replayId, sessionId, speed)
 
-	log.Printf("replay started for session %s", sessionId)
+	go replay.Run(replayId, events, h.rep)
+
+	log.Printf("replay started: id=%s session=%s events=%d speed=%.1fx", replayId, sessionId, len(events), speed)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"replay_id": replayId,
+	})
+}
+
+func (h *ReplayHandler) StopReplay(c *fiber.Ctx) error {
+	replayId := c.Params("replayId")
+	status, currentId, _, _, _ := h.rep.Get()
+	if status == replay.StatusIdle || currentId != replayId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "replay not found"})
+	}
+	h.rep.Stop()
+	log.Printf("replay stopped: id=%s", replayId)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *ReplayHandler) PauseReplay(c *fiber.Ctx) error {
+	replayId := c.Params("replayId")
+	status, currentId, _, _, _ := h.rep.Get()
+	if status == replay.StatusIdle || currentId != replayId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "replay not found"})
+	}
+	if err := h.rep.Pause(); err != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+	}
+	log.Printf("replay paused: id=%s", replayId)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *ReplayHandler) ResumeReplay(c *fiber.Ctx) error {
+	replayId := c.Params("replayId")
+	status, currentId, _, _, _ := h.rep.Get()
+	if status == replay.StatusIdle || currentId != replayId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "replay not found"})
+	}
+	if err := h.rep.Resume(); err != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+	}
+	log.Printf("replay resumed: id=%s", replayId)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *ReplayHandler) StepReplay(c *fiber.Ctx) error {
+	replayId := c.Params("replayId")
+	status, currentId, _, _, _ := h.rep.Get()
+	if status == replay.StatusIdle || currentId != replayId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "replay not found"})
+	}
+	if err := h.rep.Step(); err != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+	}
+	log.Printf("replay stepped: id=%s", replayId)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *ReplayHandler) GetReplayStatus(c *fiber.Ctx) error {
+	replayId := c.Params("replayId")
+	status, currentId, sessionId, currentSeq, speed := h.rep.Get()
+	if status == replay.StatusIdle || currentId != replayId {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "replay not found"})
+	}
+	return c.JSON(fiber.Map{
+		"replay_id":   currentId,
+		"session_id":  sessionId,
+		"status":      status,
+		"current_seq": currentSeq,
+		"speed":       speed,
 	})
 }
