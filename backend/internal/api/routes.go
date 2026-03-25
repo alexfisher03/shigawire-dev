@@ -40,6 +40,11 @@ func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState
 	v1.Post("/projects/:projectId/sessions/:sessionId/events", eh.SeedEvent)
 
 	v1.Post("/projects/:projectId/sessions/:sessionId/replay/start", rh.StartReplay)
+	v1.Post("/projects/:projectId/sessions/:sessionId/replay/:replayId/stop", rh.StopReplay)
+	v1.Post("/projects/:projectId/sessions/:sessionId/replay/:replayId/pause", rh.PauseReplay)
+	v1.Post("/projects/:projectId/sessions/:sessionId/replay/:replayId/resume", rh.ResumeReplay)
+	v1.Post("/projects/:projectId/sessions/:sessionId/replay/:replayId/step", rh.StepReplay)
+	v1.Get("/projects/:projectId/sessions/:sessionId/replay/:replayId/status", rh.GetReplayStatus)
 
 	v1.Get("/swagger/*", dh.GetSwaggerSpecification)
 	v1.Get("/openapi.yaml", dh.GetOpenAPISpec)
