@@ -26,6 +26,7 @@ type ReplayState struct {
 	pauseC  chan struct{}
 	resumeC chan struct{}
 	stepC   chan struct{}
+	speedC  chan struct{}
 }
 
 func NewReplayState() *ReplayState {
@@ -44,6 +45,7 @@ func (s *ReplayState) Start(replayId, sessionId string, speed float64) {
 	s.pauseC = make(chan struct{}, 1)
 	s.resumeC = make(chan struct{}, 1)
 	s.stepC = make(chan struct{}, 1)
+	s.speedC = make(chan struct{}, 1)
 }
 
 // Stop signals the scheduler to exit and resets state to idle.
@@ -133,9 +135,23 @@ func (s *ReplayState) getSpeed() float64 {
 	return s.speed
 }
 
+func (s *ReplayState) SetSpeed(v float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status != StatusRunning && s.status != StatusPaused {
+		return errors.New("no active replay")
+	}
+	s.speed = v
+	select {
+	case s.speedC <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
 // Channels returns the control channels captured at Start time for use by the scheduler goroutine.
-func (s *ReplayState) Channels() (stopC, pauseC, resumeC, stepC chan struct{}) {
+func (s *ReplayState) Channels() (stopC, pauseC, resumeC, stepC, speedC chan struct{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.stopC, s.pauseC, s.resumeC, s.stepC
+	return s.stopC, s.pauseC, s.resumeC, s.stepC, s.speedC
 }
