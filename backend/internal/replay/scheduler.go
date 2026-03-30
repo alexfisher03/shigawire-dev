@@ -15,7 +15,7 @@ import (
 func Run(replayId string, events []*models.Event, state *ReplayState) {
 	defer state.MarkDone()
 
-	stopC, pauseC, resumeC, stepC := state.Channels()
+	stopC, pauseC, resumeC, stepC, speedC := state.Channels()
 
 	for i, e := range events {
 		state.SetSeq(e.Seq)
@@ -29,7 +29,7 @@ func Run(replayId string, events []*models.Event, state *ReplayState) {
 		next := events[i+1]
 		delay := interEventDelay(e, next, state.getSpeed())
 
-		if !waitOrInterrupt(delay, stopC, pauseC, resumeC, stepC) {
+		if !waitOrInterrupt(delay, stopC, pauseC, resumeC, stepC, speedC, state.getSpeed) {
 			return // stopped
 		}
 	}
@@ -51,7 +51,7 @@ func interEventDelay(e, next *models.Event, speed float64) time.Duration {
 // waitOrInterrupt waits for delay, but can be interrupted by a pause, stop, or step signal.
 // Returns true when the delay elapses or a step is received (caller should advance to next event).
 // Returns false when a stop is received (caller should exit).
-func waitOrInterrupt(delay time.Duration, stopC, pauseC, resumeC, stepC chan struct{}) bool {
+func waitOrInterrupt(delay time.Duration, stopC, pauseC, resumeC, stepC, speedC chan struct{}, getSpeed func() float64) bool {
 	remaining := delay
 	for {
 		// Check for a pending pause before starting the timer. This ensures that a
@@ -71,6 +71,7 @@ func waitOrInterrupt(delay time.Duration, stopC, pauseC, resumeC, stepC chan str
 
 		timer := time.NewTimer(remaining)
 		start := time.Now()
+		currentSpeed := getSpeed()
 
 		select {
 		case <-stopC:
@@ -91,6 +92,17 @@ func waitOrInterrupt(delay time.Duration, stopC, pauseC, resumeC, stepC chan str
 			if stepped {
 				return true
 			}
+
+		case <-speedC:
+			timer.Stop()
+			elapsed := time.Since(start)
+			newSpeed := getSpeed()
+			unelapsed := remaining - elapsed
+			if unelapsed < 0 {
+				unelapsed = 0
+			}
+			remaining = time.Duration(float64(unelapsed) * (currentSpeed / newSpeed))
+			currentSpeed = newSpeed
 
 		case <-timer.C:
 			return true
