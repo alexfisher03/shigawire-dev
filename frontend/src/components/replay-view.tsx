@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ChevronLeft, Play, Pause, RotateCcw, Trash2, Lock, Square } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ChevronLeft, Play, Pause, Trash2, Lock, Square, SkipForward } from 'lucide-react'
 import { TimelinePlayer } from './timeline-player'
 import { RequestInspector } from './request-inspector'
 import {
@@ -13,7 +13,13 @@ import {
   getGlobalRecordingStatus,
   RecordingStatus,
   startRecording,
-  stopRecording
+  stopRecording,
+  startReplay,
+  stopReplay,
+  pauseReplay,
+  resumeReplay,
+  stepReplay,
+  getReplayWsUrl,
 } from '@/lib/api'
 import { ConfirmDialog } from './confirm-dialog'
 
@@ -25,7 +31,6 @@ interface ReplayViewProps {
 }
 
 export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: ReplayViewProps) {
-  const [isPlaying, setIsPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [selectedRequest, setSelectedRequest] = useState(0)
   const [session, setSession] = useState<Session | null>(null)
@@ -34,6 +39,13 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null)
+
+  // Replay state
+  const [replayId, setReplayId] = useState<string | null>(null)
+  const [replayStatus, setReplayStatus] = useState<'idle' | 'running' | 'paused' | 'done'>('idle')
+  const [currentReplaySeq, setCurrentReplaySeq] = useState<number | null>(null)
+  const [wsError, setWsError] = useState<string | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
     if (!sessionId || !projectId) return
@@ -86,20 +98,45 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     return () => clearInterval(interval)
   }, [sessionId, projectId])
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+  // WebSocket lifecycle — open when a replayId is set, close on cleanup
+  useEffect(() => {
+    if (!replayId) return
 
-  const totalDuration = events.reduce((acc, e) => acc + (e.durationMs || 0), 0)
-  const currentTime = 0 // TODO: Calculate based on playback position
+    const ws = new WebSocket(getReplayWsUrl(replayId))
+    wsRef.current = ws
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        setCurrentReplaySeq(msg.current_seq)
+        setReplayStatus(msg.status)
+        if (msg.status === 'done') ws.close()
+      } catch {
+        // ignore malformed messages
+      }
+    }
+
+    ws.onerror = () => setWsError('WebSocket error — replay updates unavailable')
+
+    ws.onclose = (e) => {
+      if (!e.wasClean) {
+        setWsError('Connection lost')
+      }
+    }
+
+    return () => {
+      ws.close()
+      wsRef.current = null
+    }
+  }, [replayId])
 
   const isSealed = session?.sealed === true
   const isRecordingThisSession =
     recordingStatus?.recording &&
     recordingStatus.session_id === sessionId &&
     recordingStatus.project_id === projectId
+
+  const replayActive = replayStatus !== 'idle'
 
   const handleStartRecording = async () => {
     if (!projectId || !sessionId || isSealed) return;
@@ -108,7 +145,6 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     const status = await getGlobalRecordingStatus();
     if (status && status.recording) {
       if (status.session_id === sessionId) {
-        // Already recording this session, should be handled by UI state but just in case
         return;
       } else {
         alert("Session currently running on another session.");
@@ -133,6 +169,62 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
       alert("Failed to stop recording.");
     }
   };
+
+  const handleReplayPlayPause = async () => {
+    if (!projectId || !sessionId) return
+
+    if (replayStatus === 'idle' || replayStatus === 'done') {
+      // Start a new replay
+      setWsError(null)
+      setCurrentReplaySeq(null)
+      const result = await startReplay(projectId, sessionId, speed)
+      if (!result) {
+        alert('Failed to start replay.')
+        return
+      }
+      setReplayId(result.replay_id)
+      setReplayStatus('running')
+      return
+    }
+
+    if (replayStatus === 'running') {
+      await pauseReplay(projectId, sessionId, replayId!)
+      // Status will be updated via WS
+      return
+    }
+
+    if (replayStatus === 'paused') {
+      await resumeReplay(projectId, sessionId, replayId!)
+      // Status will be updated via WS
+    }
+  }
+
+  const handleReplayStop = async () => {
+    if (!projectId || !sessionId || !replayId) return
+    wsRef.current?.close()
+    await stopReplay(projectId, sessionId, replayId)
+    setReplayId(null)
+    setReplayStatus('idle')
+    setCurrentReplaySeq(null)
+    setWsError(null)
+  }
+
+  const handleReplayStep = async () => {
+    if (!projectId || !sessionId || !replayId) return
+    await stepReplay(projectId, sessionId, replayId)
+  }
+
+  const replayPlayPauseIcon = () => {
+    if (replayStatus === 'running') return <Pause className="w-3.5 h-3.5 text-blue-300" />
+    return <Play className="w-3.5 h-3.5 text-blue-300" />
+  }
+
+  const replayStatusLabel = () => {
+    if (replayStatus === 'running') return `Replay running at ${speed}x`
+    if (replayStatus === 'paused') return `Paused on request #${currentReplaySeq ?? '—'}`
+    if (replayStatus === 'done') return 'Replay complete'
+    return null
+  }
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col bg-black/40 backdrop-blur-sm">
@@ -173,9 +265,10 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
         </div>
       </div>
 
-      {/* Recording Controls */}
+      {/* Recording / Replay Controls */}
       <div className="border-b border-blue-900/50 bg-black/60 p-4 backdrop-blur-sm">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
+          {/* Recording */}
           <div className="flex items-center gap-2">
             {isRecordingThisSession ? (
               <button
@@ -203,6 +296,67 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
               </button>
             )}
           </div>
+
+          <div className="w-px h-5 bg-blue-900/50 shrink-0" />
+
+          {/* Replay controls */}
+          <div className="flex items-center gap-3 flex-1">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleReplayPlayPause}
+                className="p-1 hover:bg-blue-600/20 rounded transition-colors cursor-pointer"
+                title={replayStatus === 'running' ? 'Pause' : 'Play'}
+              >
+                {replayPlayPauseIcon()}
+              </button>
+
+              {replayStatus === 'paused' && (
+                <button
+                  onClick={handleReplayStep}
+                  className="p-1 hover:bg-blue-600/20 rounded transition-colors cursor-pointer"
+                  title="Step one event"
+                >
+                  <SkipForward className="w-3.5 h-3.5 text-blue-400/70" />
+                </button>
+              )}
+
+              <button
+                onClick={handleReplayStop}
+                disabled={!replayActive}
+                className="p-1 hover:bg-blue-600/20 rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Stop replay"
+              >
+                <Square className="w-3.5 h-3.5 text-blue-400/70" />
+              </button>
+
+              <div className="h-4 w-px bg-blue-900/50 mx-1" />
+
+              <select
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+                disabled={replayActive}
+                className="bg-transparent text-blue-300 text-[10px] uppercase font-mono focus:outline-none cursor-pointer hover:text-blue-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <option value={0.5}>.5x</option>
+                <option value={1}>1x</option>
+                <option value={2}>2x</option>
+                <option value={4}>4x</option>
+              </select>
+            </div>
+
+            {/* Status text */}
+            {wsError ? (
+              <span className="text-xs font-mono text-red-400 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                {wsError}
+              </span>
+            ) : replayStatusLabel() ? (
+              <span className={`text-xs font-mono flex items-center gap-2 ${replayStatus === 'done' ? 'text-green-400' : 'text-blue-300'}`}>
+                {replayStatus === 'running' && <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block" />}
+                {replayStatusLabel()}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -217,46 +371,10 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
             {/* Timeline */}
             <div className="flex-1 overflow-hidden flex flex-col bg-black/60 border-r border-blue-900/50 backdrop-blur-sm">
               <TimelinePlayer
-                isPlaying={isPlaying}
                 selectedIndex={selectedRequest}
                 onSelectRequest={setSelectedRequest}
                 events={events}
-                headerControls={
-                  <div className="flex items-center gap-2 bg-blue-900/10 px-2 py-1 border border-blue-900/30 rounded-md">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setIsPlaying(!isPlaying)}
-                        className="p-1 hover:bg-blue-600/20 rounded transition-colors cursor-pointer"
-                      >
-                        {isPlaying ? (
-                          <Pause className="w-3.5 h-3.5 text-blue-300" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5 text-blue-300" />
-                        )}
-                      </button>
-                      <button className="p-1 hover:bg-blue-600/20 rounded transition-colors cursor-pointer">
-                        <RotateCcw className="w-3.5 h-3.5 text-blue-400/70" />
-                      </button>
-                      <div className="h-4 w-px bg-blue-900/50 mx-1" />
-                      <div className="flex items-center gap-1">
-                        <select
-                          value={speed}
-                          onChange={(e) => setSpeed(Number(e.target.value))}
-                          className="bg-transparent text-blue-300 text-[10px] uppercase font-mono focus:outline-none cursor-pointer hover:text-blue-200"
-                        >
-                          <option value={0.5}>.5x</option>
-                          <option value={1}>1x</option>
-                          <option value={2}>2x</option>
-                          <option value={4}>4x</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="h-4 w-px bg-blue-900/50" />
-                    <div className="text-[10px] font-mono text-blue-400/70 tracking-tighter">
-                      <span className="font-medium text-blue-300">{formatTime(currentTime)}</span> / {formatTime(totalDuration / 1000)}
-                    </div>
-                  </div>
-                }
+                currentReplaySeq={currentReplaySeq ?? undefined}
               />
             </div>
 

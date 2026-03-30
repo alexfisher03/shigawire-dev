@@ -4,7 +4,9 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
+	"github.com/shigawire-dev/internal/control"
 	"github.com/shigawire-dev/internal/replay"
 	"github.com/shigawire-dev/internal/store"
 )
@@ -12,10 +14,11 @@ import (
 type ReplayHandler struct {
 	st  *store.Store
 	rep *replay.ReplayState
+	rec *control.RecordingState
 }
 
-func NewReplayHandler(st *store.Store, rep *replay.ReplayState) *ReplayHandler {
-	return &ReplayHandler{st: st, rep: rep}
+func NewReplayHandler(st *store.Store, rep *replay.ReplayState, rec *control.RecordingState) *ReplayHandler {
+	return &ReplayHandler{st: st, rep: rep, rec: rec}
 }
 
 type StartReplayRequest struct {
@@ -32,8 +35,8 @@ func (h *ReplayHandler) StartReplay(c *fiber.Ctx) error {
 	if s == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
 	}
-	if !s.Sealed {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "session must be sealed before replaying"})
+	if active, _, activeSessionId := h.rec.Get(); active && activeSessionId == sessionId {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "session is currently recording"})
 	}
 
 	var req StartReplayRequest
@@ -128,4 +131,30 @@ func (h *ReplayHandler) GetReplayStatus(c *fiber.Ctx) error {
 		"current_seq": currentSeq,
 		"speed":       speed,
 	})
+}
+
+// ReplayEvents upgrades to WebSocket and streams replay state changes to the client.
+// The replay keeps running if the client disconnects.
+func (h *ReplayHandler) ReplayEvents(c *websocket.Conn) {
+	replayId := c.Params("replayId")
+
+	status, currentId, _, _, _ := h.rep.Get()
+	if status == replay.StatusIdle || currentId != replayId {
+		c.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "replay not found"))
+		return
+	}
+
+	subId, ch := h.rep.Subscribe()
+	defer h.rep.Unsubscribe(subId)
+
+	log.Printf("replay ws connected: id=%s sub=%s", replayId, subId)
+
+	for msg := range ch {
+		if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
+			break
+		}
+	}
+
+	log.Printf("replay ws disconnected: id=%s sub=%s", replayId, subId)
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/websocket/v2"
 	"github.com/shigawire-dev/internal/control"
 	"github.com/shigawire-dev/internal/handlers"
 	"github.com/shigawire-dev/internal/replay"
@@ -16,7 +17,7 @@ func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState
 	sh := handlers.NewSessionHandler(st, rec)
 	eh := handlers.NewEventHandler(st)
 	dh := handlers.NewDocsHandler(st)
-	rh := handlers.NewReplayHandler(st, rep)
+	rh := handlers.NewReplayHandler(st, rep, rec)
 
 	v1.Post("/projects", ph.CreateProject)
 	v1.Get("/projects", ph.ListProjects)
@@ -45,6 +46,15 @@ func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState
 	v1.Post("/projects/:projectId/sessions/:sessionId/replay/:replayId/resume", rh.ResumeReplay)
 	v1.Post("/projects/:projectId/sessions/:sessionId/replay/:replayId/step", rh.StepReplay)
 	v1.Get("/projects/:projectId/sessions/:sessionId/replay/:replayId/status", rh.GetReplayStatus)
+
+	// WebSocket upgrade middleware must be registered on app (not group) before the handler
+	app.Use("/api/v1/replay/:replayId/ws", func(c *fiber.Ctx) error {
+		if websocket.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+	app.Get("/api/v1/replay/:replayId/ws", websocket.New(rh.ReplayEvents))
 
 	v1.Get("/swagger/*", dh.GetSwaggerSpecification)
 	v1.Get("/openapi.yaml", dh.GetOpenAPISpec)

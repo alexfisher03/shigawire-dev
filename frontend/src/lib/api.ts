@@ -356,3 +356,104 @@ export async function stopRecording(projectId: string, sessionId: string): Promi
     return false;
   }
 }
+
+// --- Replay API ---
+
+export interface ReplayStatus {
+  replay_id: string
+  session_id: string
+  status: 'idle' | 'running' | 'paused' | 'done'
+  current_seq: number
+  speed: number
+}
+
+export async function startReplay(projectId: string, sessionId: string, speed: number): Promise<{ replay_id: string } | null> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speed }),
+    });
+    if (!response.ok) {
+      console.error("Failed to start replay:", response.statusText);
+      return null;
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error starting replay:", error);
+    return null;
+  }
+}
+
+export async function stopReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/stop`, {
+      method: "POST",
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Error stopping replay:", error);
+    return false;
+  }
+}
+
+export async function pauseReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/pause`, {
+      method: "POST",
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Error pausing replay:", error);
+    return false;
+  }
+}
+
+export async function resumeReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/resume`, {
+      method: "POST",
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Error resuming replay:", error);
+    return false;
+  }
+}
+
+export async function stepReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/step`, {
+      method: "POST",
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Error stepping replay:", error);
+    return false;
+  }
+}
+
+export async function getReplayStatus(projectId: string, sessionId: string, replayId: string): Promise<ReplayStatus | null> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/status`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching replay status:", error);
+    return null;
+  }
+}
+
+export function getReplayWsUrl(replayId: string): string {
+  const base = getBackendBaseUrl();
+  const wsBase = base.replace(/^http/, 'ws');
+  return `${wsBase}/api/v1/replay/${replayId}/ws`;
+}

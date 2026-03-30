@@ -54,6 +54,21 @@ func interEventDelay(e, next *models.Event, speed float64) time.Duration {
 func waitOrInterrupt(delay time.Duration, stopC, pauseC, resumeC, stepC, speedC chan struct{}, getSpeed func() float64) bool {
 	remaining := delay
 	for {
+		// Check for a pending pause before starting the timer. This ensures that a
+		// pause re-queued by Step() is never lost to a timer race when delay is 0.
+		select {
+		case <-pauseC:
+			done, stepped := drainPause(stopC, resumeC, stepC)
+			if done {
+				return false
+			}
+			if stepped {
+				return true
+			}
+			continue
+		default:
+		}
+
 		timer := time.NewTimer(remaining)
 		start := time.Now()
 		currentSpeed := getSpeed()
@@ -70,14 +85,12 @@ func waitOrInterrupt(delay time.Duration, stopC, pauseC, resumeC, stepC, speedC 
 			if remaining < 0 {
 				remaining = 0
 			}
-			// Blocked until resume, step, or stop.
-			select {
-			case <-stopC:
+			done, stepped := drainPause(stopC, resumeC, stepC)
+			if done {
 				return false
-			case <-stepC:
+			}
+			if stepped {
 				return true
-			case <-resumeC:
-				// Re-enter outer loop with remaining time.
 			}
 
 		case <-speedC:
@@ -94,5 +107,18 @@ func waitOrInterrupt(delay time.Duration, stopC, pauseC, resumeC, stepC, speedC 
 		case <-timer.C:
 			return true
 		}
+	}
+}
+
+// drainPause blocks until resume, step, or stop while the scheduler is paused.
+// Returns (done=true) on stop, (stepped=true) on step, (false, false) on resume.
+func drainPause(stopC, resumeC, stepC chan struct{}) (done bool, stepped bool) {
+	select {
+	case <-stopC:
+		return true, false
+	case <-stepC:
+		return false, true
+	case <-resumeC:
+		return false, false
 	}
 }
