@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { Event } from '@/lib/api'
 
 const getMethodColor = (method: string) => {
@@ -28,20 +29,27 @@ const getStatusColor = (status?: number) => {
 }
 
 export function TimelinePlayer({
-  isPlaying,
   selectedIndex,
   onSelectRequest,
   events = [],
-  headerControls,
+  currentReplaySeq,
 }: {
-  isPlaying: boolean
   selectedIndex: number
   onSelectRequest: (index: number) => void
   events?: Event[]
-  headerControls?: React.ReactNode
+  currentReplaySeq?: number
 }) {
+  const rowRefs = useRef<Record<number, HTMLButtonElement | null>>({})
+
+  // Auto-scroll to the currently active replay row
+  useEffect(() => {
+    if (currentReplaySeq == null) return
+    const el = rowRefs.current[currentReplaySeq]
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [currentReplaySeq])
+
   // Calculate relative timestamps from event timestamps
-  const eventsWithTimestamps = events.map((event, index) => {
+  const eventsWithTimestamps = events.map((event) => {
     const timestamp = event.started_at ? new Date(event.started_at).getTime() : 0
     const firstTimestamp = events[0]?.started_at ? new Date(events[0].started_at).getTime() : 0
     if(event && event.started_at && event.ended_at)
@@ -52,8 +60,6 @@ export function TimelinePlayer({
     }
   })
 
-  const firstTimestamp = events[0]?.started_at ? new Date(events[0].started_at).getTime() : 0
-
   const maxTimestamp = eventsWithTimestamps.length > 0
     ? Math.max(...eventsWithTimestamps.map((e) => e.relativeTimestamp + (e.durationMs || 0)))
     : 0
@@ -63,7 +69,6 @@ export function TimelinePlayer({
       <div className="flex-1 overflow-y-auto p-4 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-mono font-semibold text-blue-200 tracking-wide">Request Timeline</h3>
-          {headerControls}
         </div>
         <div className="flex-1 flex items-center justify-center">
           <span className="text-blue-400/70 font-mono text-sm py-8">No events recorded for this session</span>
@@ -76,20 +81,24 @@ export function TimelinePlayer({
     <div className="flex-1 overflow-y-auto p-4 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-mono font-semibold text-blue-200 tracking-wide">Request Timeline</h3>
-        {headerControls}
       </div>
       <div className="space-y-2">
         {eventsWithTimestamps.map((event, index) => {
           const isSelected = selectedIndex === index
+          const isReplayActive = currentReplaySeq != null && event.seq === currentReplaySeq
 
           return (
             <button
               key={event.id}
+              ref={(el) => { rowRefs.current[event.seq] = el }}
               onClick={() => onSelectRequest(index)}
-              className={`w-full p-3 rounded border transition-all text-left cursor-pointer ${isSelected
-                ? 'bg-blue-600/20 border-blue-600/50'
-                : 'bg-blue-600/5 border-blue-900/50 hover:bg-blue-600/10'
-                }`}
+              className={`w-full p-3 rounded border transition-all text-left cursor-pointer ${
+                isReplayActive
+                  ? 'bg-green-600/20 border-green-500/50 ring-1 ring-green-500/40'
+                  : isSelected
+                  ? 'bg-blue-600/20 border-blue-600/50'
+                  : 'bg-blue-600/5 border-blue-900/50 hover:bg-blue-600/10'
+              }`}
             >
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -109,7 +118,7 @@ export function TimelinePlayer({
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-blue-400/70 font-mono">
-                  <span>+{event.relativeTimestamp}ms</span>
+                  <span>+{event.relativeTimestamp >= 1000 ? `${(event.relativeTimestamp / 1000).toFixed(1)}s` : `${event.relativeTimestamp}ms`}</span>
                   {event.durationMs && <span>{event.durationMs}ms</span>}
                 </div>
                 {event.durationMs && maxTimestamp > 0 && (
