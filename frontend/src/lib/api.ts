@@ -357,6 +357,23 @@ export async function stopRecording(projectId: string, sessionId: string): Promi
   }
 }
 
+export async function stopCapture(projectId: string, sessionId: string): Promise<boolean> {
+  const base = getBackendBaseUrl();
+  try {
+    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/capture/stop`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      console.error("Failed to stop capture:", response.statusText);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error stopping capture:", error);
+    return false;
+  }
+}
+
 // --- Replay API ---
 
 export interface ReplayStatus {

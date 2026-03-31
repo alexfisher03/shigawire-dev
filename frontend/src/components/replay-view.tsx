@@ -14,6 +14,7 @@ import {
   RecordingStatus,
   startRecording,
   stopRecording,
+  stopCapture,
   startReplay,
   stopReplay,
   pauseReplay,
@@ -38,6 +39,8 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
   const [loading, setLoading] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showSealConfirm, setShowSealConfirm] = useState(false)
+  const [sealing, setSealing] = useState(false)
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null)
 
   // Replay state
@@ -170,6 +173,20 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     }
   };
 
+  const handleEndCapture = async () => {
+    if (!projectId || !sessionId) return
+    setSealing(true)
+    const success = await stopCapture(projectId, sessionId)
+    setSealing(false)
+    if (success) {
+      setShowSealConfirm(false)
+      setRecordingStatus({ recording: false, project_id: '', session_id: '' })
+      setSession((prev) => prev ? { ...prev, sealed: true } : prev)
+    } else {
+      alert('Failed to seal session.')
+    }
+  }
+
   const handleReplayPlayPause = async () => {
     if (!projectId || !sessionId) return
 
@@ -295,6 +312,16 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
                 Start Recording
               </button>
             )}
+            {!isSealed && (
+              <button
+                onClick={() => setShowSealConfirm(true)}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-red-500/20 border border-red-500/30 rounded transition-colors text-red-400/80 hover:text-red-300 cursor-pointer text-sm font-mono"
+                title="Permanently seal this session — no further recording allowed"
+              >
+                <Lock className="w-4 h-4" />
+                End Capture
+              </button>
+            )}
           </div>
 
           <div className="w-px h-5 bg-blue-900/50 shrink-0" />
@@ -407,6 +434,19 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
             }}
             onCancel={() => setShowDeleteConfirm(false)}
             loading={deleting}
+          />
+        )
+      }
+
+      {
+        showSealConfirm && (
+          <ConfirmDialog
+            title="End Capture"
+            message="Are you sure? This will permanently seal this session. No further recording or event capture will be allowed."
+            confirmLabel="Seal Session"
+            onConfirm={handleEndCapture}
+            onCancel={() => setShowSealConfirm(false)}
+            loading={sealing}
           />
         )
       }
