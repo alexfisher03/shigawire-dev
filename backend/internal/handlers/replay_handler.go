@@ -58,6 +58,9 @@ func (h *ReplayHandler) StartReplay(c *fiber.Ctx) error {
 
 	replayId := "replay_" + uuid.NewString()
 	h.rep.Start(replayId, sessionId, speed)
+	if len(events) > 0 {
+		h.rep.SetSeq(events[0].Seq)
+	}
 
 	go replay.Run(replayId, events, h.rep)
 
@@ -149,6 +152,10 @@ func (h *ReplayHandler) ReplayEvents(c *websocket.Conn) {
 	defer h.rep.Unsubscribe(subId)
 
 	log.Printf("replay ws connected: id=%s sub=%s", replayId, subId)
+
+	if err := c.WriteMessage(websocket.TextMessage, h.rep.WSSnapshot()); err != nil {
+		return
+	}
 
 	for msg := range ch {
 		if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {

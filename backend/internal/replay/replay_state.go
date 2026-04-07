@@ -198,6 +198,13 @@ func (s *ReplayState) Unsubscribe(id string) {
 	}
 }
 
+// WSSnapshot returns the current replay state as JSON for a new WebSocket client.
+func (s *ReplayState) WSSnapshot() []byte {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.marshalEvent()
+}
+
 // marshalEvent builds the JSON message for the current state.
 // Caller must hold s.mu (at least read lock).
 func (s *ReplayState) marshalEvent() []byte {

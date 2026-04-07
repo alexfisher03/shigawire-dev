@@ -111,7 +111,8 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data)
-        setCurrentReplaySeq(msg.current_seq)
+        const n = Number(msg.current_seq)
+        setCurrentReplaySeq(Number.isFinite(n) ? n : null)
         setReplayStatus(msg.status)
         if (msg.status === 'done') ws.close()
       } catch {
@@ -191,11 +192,12 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     if (!projectId || !sessionId) return
 
     if (replayStatus === 'idle' || replayStatus === 'done') {
-      // Start a new replay
       setWsError(null)
-      setCurrentReplaySeq(null)
+      const firstSeq = events.length > 0 ? Number(events[0].seq) : NaN
+      setCurrentReplaySeq(Number.isFinite(firstSeq) ? firstSeq : null)
       const result = await startReplay(projectId, sessionId, speed)
       if (!result) {
+        setCurrentReplaySeq(null)
         alert('Failed to start replay.')
         return
       }
