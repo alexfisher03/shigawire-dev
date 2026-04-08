@@ -15,7 +15,7 @@ export function Header() {
               Shigawire Dev
             </h1>
             <p className="text-xs font-mono text-blue-400/70">
-              HTTP Recording & Replay
+              HTTP(S) Recording & Replay
             </p>
           </div>
         </div>

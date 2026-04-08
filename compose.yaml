@@ -7,6 +7,7 @@ services:
       - ./backend:/app
       - ./docs:/app/docs:ro
       - ./data:/data
+      - go-mod-cache:/go/pkg/mod
     ports:
       - "8083:8083"
       - "9090:9090"
@@ -18,32 +19,5 @@ services:
     command: sh -c "go mod download && go run ./cmd/server"
     restart: unless-stopped
 
-  frontend:
-    image: node:20-alpine
-    container_name: shigawire-frontend
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - BACKEND_INTERNAL_URL=http://backend:8083
-      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8083
-    command: sh -c "npm ci && npm run dev -- -H 0.0.0.0 -p 3000"
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  swagger-ui:
-    image: swaggerapi/swagger-ui:latest
-    container_name: shigawire-swagger-ui
-    ports:
-      - "8081:8080"
-    volumes:
-      - ./docs:/usr/share/nginx/html/docs:ro
-    environment:
-      - SWAGGER_JSON=/usr/share/nginx/html/docs/openapi.yaml
-    restart: unless-stopped
+volumes:
+  go-mod-cache:
