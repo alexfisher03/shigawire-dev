@@ -218,13 +218,6 @@ export function Sidebar({
               )}
             </div>
           </div>
-
-          <div className="px-4 py-4 border-t border-blue-900/50 text-xs space-y-1 font-mono">
-            <div className="text-blue-400/70">
-              <span className="font-semibold text-blue-300">Status:</span>{" "}
-              Connected
-            </div>
-          </div>
         </nav>
       </aside>
 

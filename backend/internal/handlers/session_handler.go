@@ -1,6 +1,11 @@
 package handlers
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -23,78 +28,143 @@ type CreateSessionRequest struct {
 	Name string `json:"name"`
 }
 
-func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
+func (h *SessionHandler) computeGlobalRecordingStatus() (fiber.Map, error) {
 	active, projectId, sessionId := h.rec.Get()
 	if !active {
-		return c.JSON(fiber.Map{
+		return fiber.Map{
 			"recording":  false,
 			"project_id": "",
 			"session_id": "",
-		})
+		}, nil
 	}
 
-	// malformed in-memory state
 	if projectId == "" || sessionId == "" {
 		if err := h.rec.Stop(); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+			return nil, err
 		}
-		return c.JSON(fiber.Map{
+		return fiber.Map{
 			"recording":      false,
 			"project_id":     "",
 			"session_id":     "",
 			"state_repaired": true,
 			"message":        "recording state was invalid and has been reset",
-		})
+		}, nil
 	}
 
 	s, err := store.GetSession(h.st.DB, sessionId)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get session"})
+		return nil, err
 	}
 	if s == nil {
 		if err := h.rec.Stop(); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+			return nil, err
 		}
-		return c.JSON(fiber.Map{
+		return fiber.Map{
 			"recording":      false,
 			"project_id":     "",
 			"session_id":     "",
 			"state_repaired": true,
 			"message":        "active session not found; recording state reset",
-		})
+		}, nil
 	}
 
-	// canonicalize project from session ownership
 	if s.ProjectId != projectId {
 		projectId = s.ProjectId
 		if err := h.rec.Start(projectId, sessionId); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to start recording state"})
+			return nil, err
 		}
 	}
 
-	// ensure project still exists
 	p, err := store.GetProject(h.st.DB, projectId)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get project"})
+		return nil, err
 	}
 	if p == nil {
 		if err := h.rec.Stop(); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to stop recording state"})
+			return nil, err
 		}
-		return c.JSON(fiber.Map{
+		return fiber.Map{
 			"recording":      false,
 			"project_id":     "",
 			"session_id":     "",
 			"state_repaired": true,
 			"message":        "active project not found; recording state reset",
-		})
+		}, nil
 	}
 
-	return c.JSON(fiber.Map{
+	return fiber.Map{
 		"recording":  true,
 		"project_id": projectId,
 		"session_id": sessionId,
+	}, nil
+}
+
+func (h *SessionHandler) GlobalRecordingStatus(c *fiber.Ctx) error {
+	m, err := h.computeGlobalRecordingStatus()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to resolve recording status"})
+	}
+	return c.JSON(m)
+}
+
+func (h *SessionHandler) RecordStatusStream(c *fiber.Ctx) error {
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("Connection", "keep-alive")
+	c.Set("X-Accel-Buffering", "no")
+
+	reqCtx := c.UserContext()
+	if reqCtx == nil {
+		reqCtx = context.Background()
+	}
+
+	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+		subID, ch := h.rec.Subscribe()
+		defer h.rec.Unsubscribe(subID)
+
+		send := func() bool {
+			m, err := h.computeGlobalRecordingStatus()
+			if err != nil {
+				log.Printf("record stream compute: %v", err)
+				m = fiber.Map{"recording": false, "project_id": "", "session_id": ""}
+			}
+			b, err := json.Marshal(m)
+			if err != nil {
+				return false
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", b); err != nil {
+				return false
+			}
+			return w.Flush() == nil
+		}
+
+		if !send() {
+			return
+		}
+
+		keepAlive := time.NewTicker(25 * time.Second)
+		defer keepAlive.Stop()
+
+		for {
+			select {
+			case <-reqCtx.Done():
+				return
+			case <-ch:
+				if !send() {
+					return
+				}
+			case <-keepAlive.C:
+				if _, err := fmt.Fprintf(w, ": ping\n\n"); err != nil {
+					return
+				}
+				if w.Flush() != nil {
+					return
+				}
+			}
+		}
 	})
+
+	return nil
 }
 
 func (h *SessionHandler) CreateSession(c *fiber.Ctx) error {

@@ -4,14 +4,13 @@ import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { ChevronRight, Lock, Plus } from 'lucide-react'
 import {
-  createSession,
   getSessionEvents,
   listSessions,
   listAllSessions,
   Session,
-  getGlobalRecordingStatus,
-  RecordingStatus
 } from '@/lib/api'
+import { useRecordingStatusStream } from '@/hooks/use-recording-status-stream'
+import { CreateSessionModal } from '@/components/create-session-modal'
 
 interface SessionWithStats extends Session {
   requests: number
@@ -26,7 +25,8 @@ interface SessionListProps {
 export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
   const [sessions, setSessions] = useState<SessionWithStats[]>([])
   const [loading, setLoading] = useState(true)
-  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null)
+  const [createSessionOpen, setCreateSessionOpen] = useState(false)
+  const { status: recordingStatus } = useRecordingStatusStream()
 
   useEffect(() => {
     async function loadSessions() {
@@ -60,38 +60,15 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
     loadSessions()
   }, [projectId])
 
-  useEffect(() => {
-    async function checkRecordingState() {
-      const status = await getGlobalRecordingStatus()
-      setRecordingStatus(status)
-    }
-
-    // Initial check
-    checkRecordingState()
-
-    // Ping every 2 seconds
-    const interval = setInterval(checkRecordingState, 2000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const handleNewSession = async () => {
-    if (!projectId) return // Cannot create session without a project context
-
-    const name = prompt('Enter session name:')
-    if (!name) return
-
-    const newSession = await createSession(projectId, name)
-
-    if (newSession) {
-      setSessions([
-        {
-          ...newSession,
-          requests: 0,
-          redacted: 0,
-        },
-        ...sessions,
-      ])
-    }
+  const handleSessionCreated = (newSession: Session) => {
+    setSessions((prev) => [
+      {
+        ...newSession,
+        requests: 0,
+        redacted: 0,
+      },
+      ...prev,
+    ])
   }
 
   return (
@@ -108,7 +85,8 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
           </div>
           {projectId && (
             <button
-              onClick={handleNewSession}
+              type="button"
+              onClick={() => setCreateSessionOpen(true)}
               className="px-4 py-2 rounded border border-blue-600/70 bg-blue-600/10 text-blue-200 font-mono text-sm hover:bg-blue-600/20 transition-colors flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -142,6 +120,14 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
           </div>
         )}
       </div>
+
+      {projectId && createSessionOpen && (
+        <CreateSessionModal
+          projectId={projectId}
+          onClose={() => setCreateSessionOpen(false)}
+          onCreated={handleSessionCreated}
+        />
+      )}
     </div>
   )
 }

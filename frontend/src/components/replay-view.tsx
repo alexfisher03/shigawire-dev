@@ -11,7 +11,6 @@ import {
   Session,
   deleteSession,
   getGlobalRecordingStatus,
-  RecordingStatus,
   startRecording,
   stopRecording,
   stopCapture,
@@ -23,6 +22,7 @@ import {
   getReplayWsUrl,
 } from '@/lib/api'
 import { ConfirmDialog } from './confirm-dialog'
+import { useRecordingStatusStream } from '@/hooks/use-recording-status-stream'
 
 interface ReplayViewProps {
   projectId: string | null
@@ -41,7 +41,8 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
   const [deleting, setDeleting] = useState(false)
   const [showSealConfirm, setShowSealConfirm] = useState(false)
   const [sealing, setSealing] = useState(false)
-  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null)
+  const { status: recordingStatus, refresh: refreshRecordingStatus } =
+    useRecordingStatusStream()
 
   // Replay state
   const [replayId, setReplayId] = useState<string | null>(null)
@@ -76,30 +77,30 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     loadSessionData()
   }, [sessionId, projectId])
 
-  // Hydrate recording status and new events
+  const liveCapture =
+    Boolean(projectId) &&
+    Boolean(sessionId) &&
+    recordingStatus?.recording === true &&
+    recordingStatus.session_id === sessionId &&
+    recordingStatus.project_id === projectId
+
   useEffect(() => {
-    if (!sessionId || !projectId) return
-
-    async function checkRecordingStateAndRefreshEvents() {
-      const status = await getGlobalRecordingStatus()
-      if (status) {
-        setRecordingStatus(status)
-        // If the active recording session exactly matches our session, refresh events
-        if (status.recording && status.session_id === sessionId && status.project_id === projectId) {
-          try {
-            const newEvents = await getSessionEvents(projectId, sessionId)
-            setEvents(newEvents)
-          } catch (error) {
-            console.error('Error hydrating events:', error)
-          }
-        }
-      }
+    if (!liveCapture || !projectId || !sessionId) return
+    let cancelled = false
+    const pull = () => {
+      getSessionEvents(projectId, sessionId)
+        .then((next) => {
+          if (!cancelled) setEvents(next)
+        })
+        .catch((err) => console.error('Error hydrating events:', err))
     }
-
-    // Ping every 2 seconds
-    const interval = setInterval(checkRecordingStateAndRefreshEvents, 2000)
-    return () => clearInterval(interval)
-  }, [sessionId, projectId])
+    pull()
+    const interval = setInterval(pull, 2000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [liveCapture, projectId, sessionId])
 
   // WebSocket lifecycle — open when a replayId is set, close on cleanup
   useEffect(() => {
@@ -157,21 +158,21 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     }
 
     const success = await startRecording(projectId, sessionId);
-    if (success) {
-      setRecordingStatus({ recording: true, project_id: projectId, session_id: sessionId });
-    } else {
+    if (!success) {
       alert("Failed to start recording.");
+      return;
     }
+    await refreshRecordingStatus();
   };
 
   const handleStopRecording = async () => {
     if (!projectId || !sessionId) return;
     const success = await stopRecording(projectId, sessionId);
-    if (success) {
-      setRecordingStatus({ recording: false, project_id: "", session_id: "" });
-    } else {
+    if (!success) {
       alert("Failed to stop recording.");
+      return;
     }
+    await refreshRecordingStatus();
   };
 
   const handleEndCapture = async () => {
@@ -181,7 +182,6 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     setSealing(false)
     if (success) {
       setShowSealConfirm(false)
-      setRecordingStatus({ recording: false, project_id: '', session_id: '' })
       setSession((prev) => prev ? { ...prev, sealed: true } : prev)
     } else {
       alert('Failed to seal session.')
