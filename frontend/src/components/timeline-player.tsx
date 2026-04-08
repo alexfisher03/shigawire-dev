@@ -76,19 +76,13 @@ function formatAxisMs(ms: number, totalSpan: number) {
   return `${Math.round(ms)}ms`
 }
 
-/** Breathing room after the last request end (or start if no duration) in a window. */
 const TIMELINE_PAD_MS = 30_000
-/**
- * Start a new activity window when idle between consecutive request *starts* exceeds this.
- * (Window length is no longer fixed — only padding and idle splits.)
- */
 const CLUSTER_GAP_MS = 5 * 60 * 1000
 
 type TimelineSegment = {
   startMs: number
   endMs: number
   windowMs: number
-  /** Indices into `meta` for requests in this window. */
   metaIndices: number[]
 }
 
@@ -318,7 +312,6 @@ const TRACK_DOT_CLASS =
 const TIMELINE_ZOOM_MIN = 1
 const TIMELINE_ZOOM_MAX = 8
 
-/** Requests per page within the active time window (list view). */
 const LIST_ITEMS_PER_PAGE = 5
 
 type ViewMode = 'list' | 'track'
