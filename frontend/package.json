@@ -4,9 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:tauri": "cross-env NEXT_PUBLIC_API_RELATIVE=1 BACKEND_INTERNAL_URL=http://127.0.0.1:8083 NEXT_PUBLIC_WS_BACKEND_URL=http://127.0.0.1:8083 next dev",
     "build": "next build",
+    "build:tauri": "cross-env TAURI_BUILD=1 NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:18453 next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "tauri": "tauri",
+    "tauri:dev": "npm run sidecar:prepare && tauri dev",
+    "tauri:build": "tauri build",
+    "sidecar:prepare": "node scripts/prepare-sidecar.mjs"
   },
   "dependencies": {
     "date-fns": "^4.1.0",
@@ -17,10 +23,13 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "tailwindcss": "^4",

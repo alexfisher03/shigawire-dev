@@ -1,4 +1,4 @@
-import { getBackendBaseUrl } from "./backend";
+import { getBackendBaseUrl, getWebSocketHttpOrigin } from "./backend";
 
 export interface ProjectConfig {
   targetName?: string;
@@ -470,7 +470,7 @@ export async function getReplayStatus(projectId: string, sessionId: string, repl
 }
 
 export function getReplayWsUrl(replayId: string): string {
-  const base = getBackendBaseUrl();
-  const wsBase = base.replace(/^http/, 'ws');
+  const base = getWebSocketHttpOrigin();
+  const wsBase = base.replace(/^http/, "ws");
   return `${wsBase}/api/v1/replay/${replayId}/ws`;
 }
