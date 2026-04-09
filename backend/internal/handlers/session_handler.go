@@ -18,10 +18,11 @@ import (
 type SessionHandler struct {
 	st  *store.Store
 	rec *control.RecordingState
+	eb  *control.EventBus
 }
 
-func NewSessionHandler(st *store.Store, rec *control.RecordingState) *SessionHandler {
-	return &SessionHandler{st: st, rec: rec}
+func NewSessionHandler(st *store.Store, rec *control.RecordingState, eb *control.EventBus) *SessionHandler {
+	return &SessionHandler{st: st, rec: rec, eb: eb}
 }
 
 type CreateSessionRequest struct {
@@ -278,10 +279,10 @@ func (h *SessionHandler) StartRecording(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "cannot record: session is sealed"})
 	}
 
-	// for later, this will become a map once we support multpile sessions recording
 	if err := h.rec.Start(s.ProjectId, sessionId); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to start recording"})
 	}
+	_ = store.TouchSessionUpdatedAt(h.st.DB, sessionId, time.Now().UTC().Format(time.RFC3339Nano))
 	projectId = s.ProjectId
 
 	return c.JSON(fiber.Map{
@@ -408,4 +409,51 @@ func (h *SessionHandler) StopCapture(c *fiber.Ctx) error {
 		"sealed":    true,
 		"recording": false,
 	})
+}
+
+func (h *SessionHandler) EventStream(c *fiber.Ctx) error {
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("Connection", "keep-alive")
+	c.Set("X-Accel-Buffering", "no")
+
+	reqCtx := c.UserContext()
+	if reqCtx == nil {
+		reqCtx = context.Background()
+	}
+
+	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+		subID, ch := h.eb.Subscribe()
+		defer h.eb.Unsubscribe(subID)
+
+		keepAlive := time.NewTicker(25 * time.Second)
+		defer keepAlive.Stop()
+
+		for {
+			select {
+			case <-reqCtx.Done():
+				return
+			case n := <-ch:
+				b, err := json.Marshal(n)
+				if err != nil {
+					continue
+				}
+				if _, err := fmt.Fprintf(w, "data: %s\n\n", b); err != nil {
+					return
+				}
+				if w.Flush() != nil {
+					return
+				}
+			case <-keepAlive.C:
+				if _, err := fmt.Fprintf(w, ": ping\n\n"); err != nil {
+					return
+				}
+				if w.Flush() != nil {
+					return
+				}
+			}
+		}
+	})
+
+	return nil
 }

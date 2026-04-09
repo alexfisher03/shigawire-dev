@@ -6,6 +6,8 @@ import { Sidebar } from "@/components/sidebar";
 import { SessionList } from "@/components/session-list";
 import { ReplayView } from "@/components/replay-view";
 import { ProjectView } from "@/components/project-view";
+import { HomeLanding } from "@/components/home-landing";
+import { ProjectConfigForm } from "@/components/project-config-form";
 import { listProjects, Project } from "@/lib/api";
 
 export default function Home() {
@@ -17,6 +19,8 @@ export default function Home() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   );
+  const [sessionBacklogOpen, setSessionBacklogOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
 
   // Load projects on mount
@@ -37,7 +41,19 @@ export default function Home() {
 
   const handleProjectSelect = (projectId: string | null) => {
     setSelectedProjectId(projectId);
-    // Reset view to list when switching projects/global
+    setSessionBacklogOpen(false);
+    setView("list");
+  };
+
+  const handleSelectHome = () => {
+    setSelectedProjectId(null);
+    setSessionBacklogOpen(false);
+    setView("list");
+  };
+
+  const handleSelectSessionBacklog = () => {
+    setSelectedProjectId(null);
+    setSessionBacklogOpen(true);
     setView("list");
   };
 
@@ -59,6 +75,7 @@ export default function Home() {
 
     if (selectedProjectId === projectId) {
       setSelectedProjectId(null);
+      setSessionBacklogOpen(false);
       setView("list");
     }
 
@@ -71,6 +88,7 @@ export default function Home() {
 
     if (selectedProjectId && deletedIds.includes(selectedProjectId)) {
       setSelectedProjectId(null);
+      setSessionBacklogOpen(false);
       setView("list");
     }
 
@@ -102,12 +120,22 @@ export default function Home() {
       );
     }
 
-    // Default: Global Session List (Aggregated)
+    if (sessionBacklogOpen) {
+      return (
+        <SessionList
+          onSessionSelect={(sessionId, projectId) =>
+            handleSessionSelect(sessionId, projectId)
+          }
+        />
+      );
+    }
+
     return (
-      <SessionList
-        onSessionSelect={(sessionId, projectId) =>
-          handleSessionSelect(sessionId, projectId)
-        }
+      <HomeLanding
+        projects={projects}
+        onSelectProject={(id) => handleProjectSelect(id)}
+        onOpenBacklog={handleSelectSessionBacklog}
+        onNewProject={() => setCreateProjectOpen(true)}
       />
     );
   };
@@ -122,13 +150,26 @@ export default function Home() {
           <Sidebar
             projects={projects}
             selectedProjectId={selectedProjectId}
+            sessionBacklogOpen={sessionBacklogOpen}
+            onSelectHome={handleSelectHome}
+            onSelectSessionBacklog={handleSelectSessionBacklog}
             onSelectProject={handleProjectSelect}
-            onProjectCreated={handleProjectCreated}
+            onOpenCreateProject={() => setCreateProjectOpen(true)}
             onProjectsDeleted={handleProjectsDeleted}
           />
           {renderContent()}
         </div>
       </div>
+
+      {createProjectOpen && (
+        <ProjectConfigForm
+          onCreate={(newProj) => {
+            handleProjectCreated(newProj);
+            setCreateProjectOpen(false);
+          }}
+          onClose={() => setCreateProjectOpen(false)}
+        />
+      )}
     </div>
   );
 }

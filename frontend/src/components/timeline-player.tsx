@@ -3,13 +3,23 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type MutableRefObject,
 } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  Search,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react'
 import { Event } from '@/lib/api'
 
 const getMethodColor = (method: string) => {
@@ -78,6 +88,8 @@ function formatAxisMs(ms: number, totalSpan: number) {
 
 const TIMELINE_PAD_MS = 30_000
 const CLUSTER_GAP_MS = 5 * 60 * 1000
+/** Upper bound on a single request-timeline window (track + list). Longer spans are split into multiple windows. */
+const TIMELINE_MAX_WINDOW_MS = 3 * 60 * 1000
 
 type TimelineSegment = {
   startMs: number
@@ -134,16 +146,27 @@ function buildTimelineSegments(meta: EventMeta[]): TimelineSegment[] {
     }
     prevEnd = endMs
 
-    const metaIndices = [...idxs].sort(
+    const sortedIndices = [...idxs].sort(
       (a, b) => meta[a].relativeTimestamp - meta[b].relativeTimestamp,
     )
 
-    segments.push({
-      startMs,
-      endMs,
-      windowMs: Math.max(endMs - startMs, 1),
-      metaIndices,
-    })
+    let chunkStart = startMs
+    while (chunkStart < endMs) {
+      const chunkEnd = Math.min(chunkStart + TIMELINE_MAX_WINDOW_MS, endMs)
+      const metaIndices = sortedIndices.filter((idx) => {
+        const t = meta[idx].relativeTimestamp
+        return t >= chunkStart && t < chunkEnd
+      })
+      if (metaIndices.length > 0) {
+        segments.push({
+          startMs: chunkStart,
+          endMs: chunkEnd,
+          windowMs: Math.max(chunkEnd - chunkStart, 1),
+          metaIndices,
+        })
+      }
+      chunkStart = chunkEnd
+    }
   }
 
   return segments
@@ -218,21 +241,23 @@ function buildDensityLinePath(
 }
 
 function SessionDensityStrip({
-  meta,
+  eventsForDensity,
   totalSpan,
   windowStart,
   windowEnd,
   onPickTime,
+  densityIsFiltered,
 }: {
-  meta: EventMeta[]
+  eventsForDensity: EventMeta[]
   totalSpan: number
   windowStart: number
   windowEnd: number
   onPickTime: (sessionMs: number) => void
+  densityIsFiltered: boolean
 }) {
   const pathD = useMemo(
-    () => buildDensityLinePath(meta, totalSpan, DENSITY_BIN_COUNT),
-    [meta, totalSpan],
+    () => buildDensityLinePath(eventsForDensity, totalSpan, DENSITY_BIN_COUNT),
+    [eventsForDensity, totalSpan],
   )
 
   const safeSpan = totalSpan > 0 ? totalSpan : 1
@@ -241,6 +266,8 @@ function SessionDensityStrip({
     0.5,
     ((windowEnd - windowStart) / safeSpan) * DENSITY_VB_W,
   )
+
+  const selectionPatternId = useId().replace(/:/g, '')
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
@@ -256,24 +283,50 @@ function SessionDensityStrip({
         <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
           Density
         </span>
-        <span className="text-[9px] font-mono text-zinc-600">Full session · click to jump</span>
+        <span className="text-[9px] font-mono text-zinc-600">
+          {densityIsFiltered ? 'Matching requests · click to jump' : 'Full session · click to jump'}
+        </span>
       </div>
       <svg
         role="img"
-        aria-label="Request density across the full session timeline. Click to select time window and request."
+        aria-label={
+          densityIsFiltered
+            ? 'Density of matching requests across the session. Click to select time window.'
+            : 'Request density across the full session timeline. Click to select time window and request.'
+        }
         viewBox={`0 0 ${DENSITY_VB_W} ${DENSITY_VB_H}`}
         preserveAspectRatio="none"
         className="w-full h-10 rounded-md border border-zinc-800/60 bg-zinc-950/50 cursor-crosshair"
         onClick={handleClick}
       >
-        <title>Request density — full session</title>
+        <title>
+          {densityIsFiltered ? 'Request density — matching requests' : 'Request density — full session'}
+        </title>
+        <defs>
+          <pattern
+            id={selectionPatternId}
+            width={9}
+            height={9}
+            patternUnits="userSpaceOnUse"
+          >
+            <rect width={9} height={9} fill="rgba(255,255,255,0.045)" />
+            <path
+              d="M0 9 L9 0"
+              fill="none"
+              stroke="rgba(255,255,255,0.2)"
+              strokeWidth={0.85}
+            />
+          </pattern>
+        </defs>
         <rect
           x={hiX}
           y={0}
           width={hiW}
           height={DENSITY_VB_H}
-          fill="rgba(248, 113, 113, 0.14)"
-          stroke="none"
+          fill={`url(#${selectionPatternId})`}
+          stroke="rgba(255,255,255,0.22)"
+          strokeWidth={0.6}
+          vectorEffect="non-scaling-stroke"
           pointerEvents="none"
         />
         <path
@@ -306,13 +359,138 @@ function formatSegmentLabel(startMs: number, endMs: number) {
   return `${formatClockFromSessionStart(startMs)} – ${formatClockFromSessionStart(endMs)}`
 }
 
+const METHOD_FILTER_ALL = 'all'
+
+function collectMethodOptions(meta: EventMeta[]): string[] {
+  const s = new Set<string>()
+  for (const e of meta) {
+    const m = e.method?.trim().toUpperCase()
+    if (m) s.add(m)
+  }
+  return Array.from(s).sort()
+}
+
+function eventMatchesSearch(event: EventMeta, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const url = (event.url ?? '').toLowerCase()
+  const method = (event.method ?? '').toLowerCase()
+  return url.includes(q) || method.includes(q)
+}
+
+function eventMatchesMethodFilter(event: EventMeta, filter: string): boolean {
+  if (filter === METHOD_FILTER_ALL) return true
+  const m = (event.method ?? '').trim().toUpperCase()
+  return m === filter.toUpperCase()
+}
+
+function filterMetaIndices(
+  meta: EventMeta[],
+  searchQuery: string,
+  methodFilter: string,
+): number[] {
+  const out: number[] = []
+  for (let i = 0; i < meta.length; i++) {
+    const e = meta[i]!
+    if (!eventMatchesMethodFilter(e, methodFilter)) continue
+    if (!eventMatchesSearch(e, searchQuery)) continue
+    out.push(i)
+  }
+  return out
+}
+
+function SessionRequestsCompactTable({
+  rows,
+  selectedIndex,
+  onSelectRequest,
+  currentReplaySeq,
+  rowRefs,
+  idPrefix,
+}: {
+  rows: { event: EventMeta; idx: number }[]
+  selectedIndex: number
+  onSelectRequest: (index: number) => void
+  currentReplaySeq: number | null
+  rowRefs: MutableRefObject<Record<number, HTMLElement | null>>
+  idPrefix: string
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-800/70 overflow-hidden">
+      <div
+        className="grid grid-cols-[minmax(0,3.25rem)_minmax(0,1fr)_3.75rem_3rem_2.25rem] gap-x-2 px-2 py-1 bg-zinc-900/45 border-b border-zinc-800/80 text-[9px] font-mono text-zinc-500 uppercase tracking-wide"
+        aria-hidden
+      >
+        <span>Method</span>
+        <span className="min-w-0">URL</span>
+        <span className="text-right">Offset</span>
+        <span className="text-right">Dur</span>
+        <span className="text-right">HTTP</span>
+      </div>
+      <div className="divide-y divide-zinc-800/40">
+        {rows.map(({ event, idx }) => {
+          const isSelected = selectedIndex === idx
+          const isReplayActive =
+            currentReplaySeq != null && Number(event.seq) === currentReplaySeq
+          return (
+            <button
+              key={`${idPrefix}-${event.id}`}
+              ref={(el) => {
+                rowRefs.current[event.seq] = el
+              }}
+              type="button"
+              onClick={() => onSelectRequest(idx)}
+              className={[
+                'grid w-full grid-cols-[minmax(0,3.25rem)_minmax(0,1fr)_3.75rem_3rem_2.25rem] gap-x-2 px-2 py-1 text-left font-mono text-[10px] leading-snug transition-colors cursor-pointer',
+                isReplayActive
+                  ? 'bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.35)]'
+                  : isSelected
+                    ? 'bg-sky-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.25)]'
+                    : 'hover:bg-zinc-900/55',
+              ].join(' ')}
+            >
+              <span
+                className={`inline-flex w-fit items-center text-[9px] font-bold px-1 py-0 rounded border shrink-0 ${getMethodColor(
+                  event.method || '',
+                )}`}
+              >
+                {event.method}
+              </span>
+              <span className="min-w-0 text-zinc-300/90 truncate" title={event.url}>
+                {event.url}
+              </span>
+              <span className="text-right text-zinc-500 tabular-nums">
+                {formatOffsetMs(event.relativeTimestamp)}
+              </span>
+              <span className="text-right text-zinc-500 tabular-nums">
+                {event.computedDuration ? `${event.computedDuration}ms` : '—'}
+              </span>
+              <span
+                className={`text-right tabular-nums ${event.status ? getStatusColor(event.status) : 'text-zinc-600'}`}
+              >
+                {event.status ?? '—'}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 const TRACK_DOT_CLASS =
   'mb-1 block rounded-full transition-all duration-200 border-2 shrink-0'
 
 const TIMELINE_ZOOM_MIN = 1
 const TIMELINE_ZOOM_MAX = 8
 
-const LIST_ITEMS_PER_PAGE = 5
+/** List — window mode: max cards per page (responsive grid). */
+const LIST_GRID_PAGE_SIZE = 12
+/** List — all-session table rows per page. */
+const LIST_ALL_TABLE_PAGE_SIZE = 24
+/** Track layout — grid cards per page. */
+const TRACK_GRID_PAGE_SIZE = 12
+/** Track layout — compact table rows per page. */
+const TRACK_TABLE_PAGE_SIZE = 24
 
 type ViewMode = 'list' | 'track'
 
@@ -329,9 +507,37 @@ export function TimelinePlayer({
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>('track')
   const [segmentIndex, setSegmentIndex] = useState(0)
-  const rowRefs = useRef<Record<number, HTMLButtonElement | null>>({})
+  const [searchQuery, setSearchQuery] = useState('')
+  const [methodFilter, setMethodFilter] = useState<string>(METHOD_FILTER_ALL)
+  const [methodMenuOpen, setMethodMenuOpen] = useState(false)
+  const methodPickerRef = useRef<HTMLDivElement>(null)
+  const rowRefs = useRef<Record<number, HTMLElement | null>>({})
 
   const meta = useMemo(() => buildEventMeta(events), [events])
+
+  const methodFilterOptions = useMemo(() => collectMethodOptions(meta), [meta])
+
+  const allowedMetaIndices = useMemo(
+    () => filterMetaIndices(meta, searchQuery, methodFilter),
+    [meta, searchQuery, methodFilter],
+  )
+
+  const densityMeta = useMemo(
+    () => allowedMetaIndices.map((i) => meta[i]!),
+    [meta, allowedMetaIndices],
+  )
+
+  const densityIsFiltered =
+    searchQuery.trim() !== '' || methodFilter !== METHOD_FILTER_ALL
+
+  useEffect(() => {
+    if (
+      methodFilter !== METHOD_FILTER_ALL &&
+      !methodFilterOptions.includes(methodFilter)
+    ) {
+      setMethodFilter(METHOD_FILTER_ALL)
+    }
+  }, [methodFilter, methodFilterOptions])
 
   const totalSpan = useMemo(() => {
     if (meta.length === 0) return 0
@@ -360,6 +566,23 @@ export function TimelinePlayer({
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [currentReplaySeq])
 
+  useEffect(() => {
+    if (!methodMenuOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (methodPickerRef.current?.contains(e.target as Node)) return
+      setMethodMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMethodMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [methodMenuOpen])
+
   if (events.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto p-4 flex flex-col">
@@ -375,7 +598,7 @@ export function TimelinePlayer({
 
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col min-h-0">
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap shrink-0">
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap shrink-0">
         <h3 className="text-sm font-mono font-semibold text-blue-200 tracking-wide">Request timeline</h3>
         <div
           className="inline-flex rounded-md border border-zinc-700/60 bg-zinc-950/60 p-0.5 shadow-sm"
@@ -407,9 +630,96 @@ export function TimelinePlayer({
         </div>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-3 mb-4 shrink-0 sm:items-end">
+        <div className="relative flex-1 min-w-0">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search path or method…"
+            aria-label="Search requests by URL path or HTTP method"
+            className="w-full rounded-md border border-zinc-700/35 bg-zinc-950/80 py-1.5 pl-8 pr-2.5 font-mono text-xs text-zinc-200 shadow-sm ring-1 ring-black/20 placeholder:text-zinc-600 outline-none focus:border-zinc-600/50 focus:ring-1 focus:ring-sky-500/30"
+          />
+        </div>
+        <div ref={methodPickerRef} className="relative w-full sm:w-[min(100%,12rem)] shrink-0">
+          <span className="block text-[9px] font-mono text-zinc-500 uppercase tracking-widest mb-1">
+            Method
+          </span>
+          <button
+            type="button"
+            aria-expanded={methodMenuOpen}
+            aria-haspopup="listbox"
+            aria-label="Filter by HTTP method"
+            onClick={() => setMethodMenuOpen((o) => !o)}
+            className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-zinc-700/35 bg-zinc-950/80 px-2 py-1 text-left font-mono text-[11px] leading-tight text-zinc-200 tabular-nums tracking-tight shadow-sm ring-1 ring-black/20 transition-colors hover:bg-zinc-800/30 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
+          >
+            <span className="truncate">
+              {methodFilter === METHOD_FILTER_ALL ? 'All methods' : methodFilter}
+            </span>
+            <ChevronDown
+              className={`h-3 w-3 shrink-0 text-zinc-500 opacity-80 transition-transform ${methodMenuOpen ? 'rotate-180' : ''}`}
+              strokeWidth={2.5}
+              aria-hidden
+            />
+          </button>
+          {methodMenuOpen ? (
+            <ul
+              role="listbox"
+              aria-label="HTTP methods"
+              className="absolute z-30 mt-1 left-0 min-w-full w-max max-w-[16rem] max-h-44 overflow-y-auto rounded-md border border-zinc-700/50 bg-zinc-950/98 py-0.5 shadow-xl shadow-black/40 backdrop-blur-md"
+            >
+              <li role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={methodFilter === METHOD_FILTER_ALL}
+                  onClick={() => {
+                    setMethodFilter(METHOD_FILTER_ALL)
+                    setMethodMenuOpen(false)
+                  }}
+                  className={`w-full px-2.5 py-1.5 text-left font-mono text-[11px] tabular-nums transition-colors cursor-pointer ${
+                    methodFilter === METHOD_FILTER_ALL
+                      ? 'bg-sky-500/12 text-sky-200/95'
+                      : 'text-zinc-400 hover:bg-zinc-800/55 hover:text-zinc-200'
+                  }`}
+                >
+                  All methods
+                </button>
+              </li>
+              {methodFilterOptions.map((m) => (
+                <li key={m} role="presentation">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={methodFilter === m}
+                    onClick={() => {
+                      setMethodFilter(m)
+                      setMethodMenuOpen(false)
+                    }}
+                    className={`w-full px-2.5 py-1.5 text-left font-mono text-[11px] tabular-nums transition-colors cursor-pointer ${
+                      methodFilter === m
+                        ? 'bg-sky-500/12 text-sky-200/95'
+                        : 'text-zinc-400 hover:bg-zinc-800/55 hover:text-zinc-200'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+
       {viewMode === 'list' ? (
         <TimelineListView
           meta={meta}
+          allowedMetaIndices={allowedMetaIndices}
           segments={segments}
           segmentIndex={segmentIndex}
           setSegmentIndex={setSegmentIndex}
@@ -421,6 +731,9 @@ export function TimelinePlayer({
       ) : (
         <TimelineTrackView
           meta={meta}
+          allowedMetaIndices={allowedMetaIndices}
+          densityMeta={densityMeta}
+          densityIsFiltered={densityIsFiltered}
           totalSpan={totalSpan}
           segments={segments}
           segmentIndex={segmentIndex}
@@ -436,6 +749,11 @@ export function TimelinePlayer({
         <div className="font-semibold text-zinc-200 mb-2 tracking-wide">Timeline stats</div>
         <div className="space-y-1">
           <div>Total requests: {events.length}</div>
+          {densityIsFiltered ? (
+            <div className="text-zinc-500">
+              Matching filters: {allowedMetaIndices.length}
+            </div>
+          ) : null}
           <div>Total span: {totalSpan}ms</div>
           {events.length > 0 && (
             <div>
@@ -451,6 +769,7 @@ export function TimelinePlayer({
 
 function TimelineListView({
   meta,
+  allowedMetaIndices,
   segments,
   segmentIndex,
   setSegmentIndex,
@@ -460,14 +779,16 @@ function TimelineListView({
   rowRefs,
 }: {
   meta: EventMeta[]
+  allowedMetaIndices: number[]
   segments: TimelineSegment[]
   segmentIndex: number
   setSegmentIndex: React.Dispatch<React.SetStateAction<number>>
   selectedIndex: number
   onSelectRequest: (index: number) => void
   currentReplaySeq: number | null
-  rowRefs: MutableRefObject<Record<number, HTMLButtonElement | null>>
+  rowRefs: MutableRefObject<Record<number, HTMLElement | null>>
 }) {
+  const [separateByTimeWindow, setSeparateByTimeWindow] = useState(false)
   const [listWindowMenuOpen, setListWindowMenuOpen] = useState(false)
   const [listPage, setListPage] = useState(0)
   const listWindowPickerRef = useRef<HTMLDivElement>(null)
@@ -478,17 +799,29 @@ function TimelineListView({
   const windowEnd = activeSeg?.endMs ?? windowStart + TIMELINE_PAD_MS
   const windowMs = activeSeg?.windowMs ?? TIMELINE_PAD_MS
 
+  const allowedSet = useMemo(() => new Set(allowedMetaIndices), [allowedMetaIndices])
+
+  const allRows = useMemo(
+    () =>
+      meta
+        .map((event, idx) => ({ event, idx }))
+        .filter(({ idx }) => allowedSet.has(idx)),
+    [meta, allowedSet],
+  )
+
   const windowRows = useMemo(() => {
     const idxs = activeSeg?.metaIndices ?? []
-    return idxs.map((idx) => ({ event: meta[idx], idx }))
-  }, [activeSeg, meta])
+    return idxs.filter((idx) => allowedSet.has(idx)).map((idx) => ({ event: meta[idx], idx }))
+  }, [activeSeg, meta, allowedSet])
 
-  const totalInWindow = windowRows.length
-  const pageCount = Math.max(1, Math.ceil(totalInWindow / LIST_ITEMS_PER_PAGE))
+  const sourceRows = separateByTimeWindow ? windowRows : allRows
+  const pageSize = separateByTimeWindow ? LIST_GRID_PAGE_SIZE : LIST_ALL_TABLE_PAGE_SIZE
+  const totalInSource = sourceRows.length
+  const pageCount = Math.max(1, Math.ceil(totalInSource / pageSize))
 
   useEffect(() => {
     setListPage(0)
-  }, [segmentIndex])
+  }, [segmentIndex, separateByTimeWindow, allowedMetaIndices])
 
   useEffect(() => {
     setListPage((p) => Math.min(p, Math.max(0, pageCount - 1)))
@@ -512,100 +845,205 @@ function TimelineListView({
   }, [listWindowMenuOpen])
 
   const safeListPage = Math.min(listPage, pageCount - 1)
-  const pageStart = safeListPage * LIST_ITEMS_PER_PAGE
-  const pageRows = windowRows.slice(pageStart, pageStart + LIST_ITEMS_PER_PAGE)
-  const pageLabelFrom = totalInWindow === 0 ? 0 : pageStart + 1
-  const pageLabelTo = Math.min(pageStart + LIST_ITEMS_PER_PAGE, totalInWindow)
+  const pageStart = safeListPage * pageSize
+  const pageRows = sourceRows.slice(pageStart, pageStart + pageSize)
+  const pageLabelFrom = totalInSource === 0 ? 0 : pageStart + 1
+  const pageLabelTo = Math.min(pageStart + pageSize, totalInSource)
+
+  const paginationLabel = separateByTimeWindow
+    ? 'Pagination within this time window'
+    : 'Pagination for all session requests'
 
   return (
     <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/30 px-4 pt-4 pb-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <div ref={listWindowPickerRef} className="relative w-fit max-w-[min(100%,15rem)] shrink-0">
-          <span className="block text-[9px] font-mono text-zinc-500 uppercase tracking-widest mb-1">
-            Time window
-          </span>
-          <div className="flex items-stretch rounded-md border border-zinc-700/35 bg-zinc-950/80 shadow-sm ring-1 ring-black/20 overflow-visible">
-            <button
-              type="button"
-              aria-label="Previous time window"
-              disabled={segmentIndex <= 0}
-              onClick={() => setSegmentIndex((i) => Math.max(0, i - 1))}
-              className="flex items-center justify-center px-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/40 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" strokeWidth={2} />
-            </button>
-            <div className="w-px shrink-0 bg-zinc-700/30 self-stretch my-1 rounded-full" aria-hidden />
-            <button
-              type="button"
-              aria-expanded={listWindowMenuOpen}
-              aria-haspopup="listbox"
-              aria-label="Choose time window"
-              onClick={() => setListWindowMenuOpen((o) => !o)}
-              className="flex min-w-0 items-center justify-center gap-1 px-2 py-1 text-center font-mono text-[11px] leading-tight text-zinc-200 tabular-nums tracking-tight hover:bg-zinc-800/30 transition-colors cursor-pointer"
-            >
-              <span className="truncate">{formatSegmentLabel(windowStart, windowEnd)}</span>
-              <ChevronDown
-                className={`w-3 h-3 shrink-0 text-zinc-500 opacity-80 transition-transform ${listWindowMenuOpen ? 'rotate-180' : ''}`}
-                strokeWidth={2.5}
-              />
-            </button>
-            <div className="w-px shrink-0 bg-zinc-700/30 self-stretch my-1 rounded-full" aria-hidden />
-            <button
-              type="button"
-              aria-label="Next time window"
-              disabled={segmentIndex >= maxSegmentIdx}
-              onClick={() => setSegmentIndex((i) => Math.min(maxSegmentIdx, i + 1))}
-              className="flex items-center justify-center px-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/40 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
-            >
-              <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
-            </button>
-          </div>
-          {listWindowMenuOpen ? (
-            <ul
-              role="listbox"
-              aria-label="Time windows with requests"
-              className="absolute z-30 mt-1 left-0 min-w-full w-max max-w-[16rem] max-h-44 overflow-y-auto rounded-md border border-zinc-700/50 bg-zinc-950/98 py-0.5 shadow-xl shadow-black/40 backdrop-blur-md"
-            >
-              {segments.map((seg, listIdx) => (
-                <li key={seg.startMs} role="presentation">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={listIdx === segmentIndex}
-                    onClick={() => {
-                      setSegmentIndex(listIdx)
-                      setListWindowMenuOpen(false)
-                    }}
-                    className={`w-full px-2.5 py-1.5 text-left font-mono text-[11px] tabular-nums transition-colors cursor-pointer whitespace-nowrap ${
-                      listIdx === segmentIndex
-                        ? 'bg-sky-500/12 text-sky-200/95'
-                        : 'text-zinc-400 hover:bg-zinc-800/55 hover:text-zinc-200'
-                    }`}
-                  >
-                    {formatSegmentLabel(seg.startMs, seg.endMs)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-        <div className="text-[10px] font-mono text-zinc-500 tabular-nums">
-          Window {segmentIndex + 1} / {segments.length}
-          {totalInWindow > 0 && (
-            <span className="text-zinc-600 ml-2">
-              · {pageLabelFrom}–{pageLabelTo} of {totalInWindow} in window
+      <div className="flex flex-col gap-4 mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 min-w-0">
+            <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
+              Session requests
             </span>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={separateByTimeWindow}
+                aria-label="Separate by time window"
+                title="When on, only requests in the selected time window are listed."
+                onClick={() => setSeparateByTimeWindow((v) => !v)}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/45 cursor-pointer ${
+                  separateByTimeWindow
+                    ? 'bg-sky-600/35 border-sky-500/45'
+                    : 'bg-zinc-800 border-zinc-600/60'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full bg-zinc-100 shadow transition-transform duration-200 ease-out ${
+                    separateByTimeWindow ? 'translate-x-4.5' : 'translate-x-0.5'
+                  }`}
+                  aria-hidden
+                />
+              </button>
+              <span className="text-[11px] font-mono text-zinc-400 leading-snug">
+                Separate by time window
+              </span>
+            </div>
+          </div>
+
+          {!separateByTimeWindow ? (
+            <div className="text-[10px] font-mono text-zinc-500 tabular-nums text-right shrink-0">
+              {allRows.length} matching
+              {allRows.length !== meta.length ? (
+                <span className="text-zinc-600"> · {meta.length} total in session</span>
+              ) : (
+                <span className="text-zinc-600"> · full session</span>
+              )}
+              {totalInSource > 0 && (
+                <span className="text-zinc-600 block sm:inline sm:ml-2 mt-0.5 sm:mt-0">
+                  · {pageLabelFrom}–{pageLabelTo} of {totalInSource}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="text-[10px] font-mono text-zinc-500 tabular-nums text-right shrink-0">
+              Window {segmentIndex + 1} / {segments.length}
+              {totalInSource > 0 && (
+                <span className="text-zinc-600 ml-2">
+                  · {pageLabelFrom}–{pageLabelTo} of {totalInSource} in window
+                </span>
+              )}
+            </div>
           )}
         </div>
+
+        {separateByTimeWindow ? (
+          <div ref={listWindowPickerRef} className="relative w-fit max-w-[min(100%,18rem)]">
+            <span className="block text-[9px] font-mono text-zinc-500 uppercase tracking-widest mb-1">
+              Time window
+            </span>
+            <div className="flex items-stretch rounded-md border border-zinc-700/35 bg-zinc-950/80 shadow-sm ring-1 ring-black/20 overflow-visible">
+              <button
+                type="button"
+                aria-label="Previous time window"
+                disabled={segmentIndex <= 0}
+                onClick={() => setSegmentIndex((i) => Math.max(0, i - 1))}
+                className="flex items-center justify-center px-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/40 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" strokeWidth={2} />
+              </button>
+              <div className="w-px shrink-0 bg-zinc-700/30 self-stretch my-1 rounded-full" aria-hidden />
+              <button
+                type="button"
+                aria-expanded={listWindowMenuOpen}
+                aria-haspopup="listbox"
+                aria-label="Choose time window"
+                onClick={() => setListWindowMenuOpen((o) => !o)}
+                className="flex min-w-0 items-center justify-center gap-1 px-2 py-1 text-center font-mono text-[11px] leading-tight text-zinc-200 tabular-nums tracking-tight hover:bg-zinc-800/30 transition-colors cursor-pointer"
+              >
+                <span className="truncate">{formatSegmentLabel(windowStart, windowEnd)}</span>
+                <ChevronDown
+                  className={`w-3 h-3 shrink-0 text-zinc-500 opacity-80 transition-transform ${listWindowMenuOpen ? 'rotate-180' : ''}`}
+                  strokeWidth={2.5}
+                />
+              </button>
+              <div className="w-px shrink-0 bg-zinc-700/30 self-stretch my-1 rounded-full" aria-hidden />
+              <button
+                type="button"
+                aria-label="Next time window"
+                disabled={segmentIndex >= maxSegmentIdx}
+                onClick={() => setSegmentIndex((i) => Math.min(maxSegmentIdx, i + 1))}
+                className="flex items-center justify-center px-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/40 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
+              >
+                <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
+              </button>
+            </div>
+            {listWindowMenuOpen ? (
+              <ul
+                role="listbox"
+                aria-label="Time windows with requests"
+                className="absolute z-30 mt-1 left-0 min-w-full w-max max-w-[18rem] max-h-44 overflow-y-auto rounded-md border border-zinc-700/50 bg-zinc-950/98 py-0.5 shadow-xl shadow-black/40 backdrop-blur-md"
+              >
+                {segments.map((seg, listIdx) => (
+                  <li key={seg.startMs} role="presentation">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={listIdx === segmentIndex}
+                      onClick={() => {
+                        setSegmentIndex(listIdx)
+                        setListWindowMenuOpen(false)
+                      }}
+                      className={`w-full px-2.5 py-1.5 text-left font-mono text-[11px] tabular-nums transition-colors cursor-pointer whitespace-nowrap ${
+                        listIdx === segmentIndex
+                          ? 'bg-sky-500/12 text-sky-200/95'
+                          : 'text-zinc-400 hover:bg-zinc-800/55 hover:text-zinc-200'
+                      }`}
+                    >
+                      {formatSegmentLabel(seg.startMs, seg.endMs)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      {totalInWindow === 0 ? (
+      {separateByTimeWindow && totalInSource === 0 ? (
         <div className="text-[11px] font-mono text-zinc-500 py-10 text-center border border-dashed border-zinc-800/80 rounded-lg">
-          No requests in {formatSegmentLabel(windowStart, windowEnd)}
+          {(activeSeg?.metaIndices.length ?? 0) > 0 ? (
+            <>No requests in this window match your search or method filter.</>
+          ) : (
+            <>No requests in {formatSegmentLabel(windowStart, windowEnd)}</>
+          )}
         </div>
+      ) : !separateByTimeWindow ? (
+        allRows.length === 0 ? (
+          <div className="text-[11px] font-mono text-zinc-500 py-10 text-center border border-dashed border-zinc-800/80 rounded-lg">
+            No requests match your search or method filter.
+          </div>
+        ) : (
+        <>
+          <SessionRequestsCompactTable
+            rows={pageRows}
+            selectedIndex={selectedIndex}
+            onSelectRequest={onSelectRequest}
+            currentReplaySeq={currentReplaySeq}
+            rowRefs={rowRefs}
+            idPrefix="list-all"
+          />
+          {pageCount > 1 ? (
+            <div
+              className="flex items-center justify-center gap-1 mt-4 pt-3 border-t border-zinc-800/60"
+              aria-label={paginationLabel}
+            >
+              <button
+                type="button"
+                aria-label="Previous page"
+                disabled={safeListPage <= 0}
+                onClick={() => setListPage((p) => Math.max(0, p - 1))}
+                className="flex items-center justify-center rounded-md border border-zinc-700/40 bg-zinc-950/60 p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/45 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+              </button>
+              <span className="min-w-30 text-center text-[11px] font-mono text-zinc-500 tabular-nums px-2">
+                Page {safeListPage + 1} / {pageCount}
+              </span>
+              <button
+                type="button"
+                aria-label="Next page"
+                disabled={safeListPage >= pageCount - 1}
+                onClick={() => setListPage((p) => Math.min(pageCount - 1, p + 1))}
+                className="flex items-center justify-center rounded-md border border-zinc-700/40 bg-zinc-950/60 p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/45 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" strokeWidth={2} />
+              </button>
+            </div>
+          ) : null}
+        </>
+        )
       ) : (
         <>
-          <div className="space-y-2">
+          <div className="grid gap-2 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
             {pageRows.map(({ event, idx }) => {
               const isSelected = selectedIndex === idx
               const isReplayActive =
@@ -677,7 +1115,7 @@ function TimelineListView({
           {pageCount > 1 ? (
             <div
               className="flex items-center justify-center gap-1 mt-4 pt-3 border-t border-zinc-800/60"
-              aria-label="Pagination within this time window"
+              aria-label={paginationLabel}
             >
               <button
                 type="button"
@@ -710,6 +1148,9 @@ function TimelineListView({
 
 function TimelineTrackView({
   meta,
+  allowedMetaIndices,
+  densityMeta,
+  densityIsFiltered,
   totalSpan,
   segments,
   segmentIndex,
@@ -720,6 +1161,9 @@ function TimelineTrackView({
   rowRefs,
 }: {
   meta: EventMeta[]
+  allowedMetaIndices: number[]
+  densityMeta: EventMeta[]
+  densityIsFiltered: boolean
   totalSpan: number
   segments: TimelineSegment[]
   segmentIndex: number
@@ -727,7 +1171,7 @@ function TimelineTrackView({
   selectedIndex: number
   onSelectRequest: (index: number) => void
   currentReplaySeq: number | null
-  rowRefs: MutableRefObject<Record<number, HTMLButtonElement | null>>
+  rowRefs: MutableRefObject<Record<number, HTMLElement | null>>
 }) {
   const [zoom, setZoom] = useState(TIMELINE_ZOOM_MIN)
   const [windowMenuOpen, setWindowMenuOpen] = useState(false)
@@ -735,6 +1179,8 @@ function TimelineTrackView({
   const viewportRef = useRef<HTMLDivElement>(null)
   const dotRefs = useRef<Record<number, HTMLButtonElement | null>>({})
   const [viewportWidth, setViewportWidth] = useState(0)
+  const [trackCardLayout, setTrackCardLayout] = useState<'grid' | 'table'>('grid')
+  const [trackCardPage, setTrackCardPage] = useState(0)
 
   useEffect(() => {
     if (!windowMenuOpen) return
@@ -760,10 +1206,31 @@ function TimelineTrackView({
   const windowEnd = activeSeg?.endMs ?? windowStart + TIMELINE_PAD_MS
   const windowMs = activeSeg?.windowMs ?? TIMELINE_PAD_MS
 
+  const allowedSet = useMemo(() => new Set(allowedMetaIndices), [allowedMetaIndices])
+
   const inWindow = useMemo(() => {
     const idxs = activeSeg?.metaIndices ?? []
-    return idxs.map((idx) => ({ event: meta[idx], idx }))
-  }, [activeSeg, meta])
+    return idxs.filter((idx) => allowedSet.has(idx)).map((idx) => ({ event: meta[idx], idx }))
+  }, [activeSeg, meta, allowedSet])
+
+  const trackPageSize =
+    trackCardLayout === 'grid' ? TRACK_GRID_PAGE_SIZE : TRACK_TABLE_PAGE_SIZE
+  const trackTotal = inWindow.length
+  const trackPageCount = Math.max(1, Math.ceil(trackTotal / trackPageSize))
+
+  useEffect(() => {
+    setTrackCardPage(0)
+  }, [segmentIndex, trackCardLayout, allowedMetaIndices])
+
+  useEffect(() => {
+    setTrackCardPage((p) => Math.min(p, Math.max(0, trackPageCount - 1)))
+  }, [trackPageCount])
+
+  const safeTrackPage = Math.min(trackCardPage, Math.max(0, trackPageCount - 1))
+  const trackPageStart = safeTrackPage * trackPageSize
+  const trackPageRows = inWindow.slice(trackPageStart, trackPageStart + trackPageSize)
+  const trackLabelFrom = trackTotal === 0 ? 0 : trackPageStart + 1
+  const trackLabelTo = Math.min(trackPageStart + trackPageSize, trackTotal)
 
   useLayoutEffect(() => {
     const el = viewportRef.current
@@ -814,10 +1281,10 @@ function TimelineTrackView({
 
   return (
     <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/30 px-4 pt-5 pb-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-4">
         <div ref={windowPickerRef} className="relative w-fit max-w-[min(100%,15rem)] shrink-0">
           <span className="block text-[9px] font-mono text-zinc-500 uppercase tracking-widest mb-1">
-            Window
+            Time Window
           </span>
           <div className="flex items-stretch rounded-md border border-zinc-700/35 bg-zinc-950/80 shadow-sm ring-1 ring-black/20 overflow-visible">
             <button
@@ -884,40 +1351,79 @@ function TimelineTrackView({
             </ul>
           ) : null}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Zoom</span>
-          <div className="inline-flex items-center rounded-md border border-zinc-700/60 bg-zinc-950/80 p-0.5">
-            <button
-              type="button"
-              onClick={() =>
-                setZoom((z) =>
-                  Math.max(TIMELINE_ZOOM_MIN, Math.round((z / 1.2) * 100) / 100),
-                )
-              }
-              disabled={zoom <= TIMELINE_ZOOM_MIN}
-              className="p-1.5 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-              aria-label="Zoom out"
-              title="Zoom out"
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Zoom</span>
+            <div className="inline-flex items-center rounded-md border border-zinc-700/60 bg-zinc-950/80 p-0.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setZoom((z) =>
+                    Math.max(TIMELINE_ZOOM_MIN, Math.round((z / 1.2) * 100) / 100),
+                  )
+                }
+                disabled={zoom <= TIMELINE_ZOOM_MIN}
+                className="p-1.5 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                aria-label="Zoom out"
+                title="Zoom out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[11px] font-mono text-zinc-400 tabular-nums px-2 min-w-12 text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setZoom((z) =>
+                    Math.min(TIMELINE_ZOOM_MAX, Math.round(z * 1.2 * 100) / 100),
+                  )
+                }
+                disabled={zoom >= TIMELINE_ZOOM_MAX}
+                className="p-1.5 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                aria-label="Zoom in"
+                title="Zoom in"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Layout</span>
+            <div
+              className="inline-flex rounded-md border border-zinc-700/60 bg-zinc-950/60 p-0.5 shadow-sm"
+              role="group"
+              aria-label="Request list layout"
             >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[11px] font-mono text-zinc-400 tabular-nums px-2 min-w-12 text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                setZoom((z) =>
-                  Math.min(TIMELINE_ZOOM_MAX, Math.round(z * 1.2 * 100) / 100),
-                )
-              }
-              disabled={zoom >= TIMELINE_ZOOM_MAX}
-              className="p-1.5 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-              aria-label="Zoom in"
-              title="Zoom in"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
+              <button
+                type="button"
+                onClick={() => setTrackCardLayout('grid')}
+                aria-pressed={trackCardLayout === 'grid'}
+                title="Grid cards"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wide transition-colors cursor-pointer ${
+                  trackCardLayout === 'grid'
+                    ? 'bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-600/40'
+                    : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" strokeWidth={2} />
+                <span className="hidden sm:inline">Grid</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrackCardLayout('table')}
+                aria-pressed={trackCardLayout === 'table'}
+                title="Compact table"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wide transition-colors cursor-pointer ${
+                  trackCardLayout === 'table'
+                    ? 'bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-600/40'
+                    : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" strokeWidth={2} />
+                <span className="hidden sm:inline">Table</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -931,7 +1437,11 @@ function TimelineTrackView({
       >
         {windowCount === 0 ? (
           <div className="text-[11px] font-mono text-zinc-500 py-10 text-center border border-dashed border-zinc-800/80 rounded-lg">
-            No requests in {formatSegmentLabel(windowStart, windowEnd)}
+            {(activeSeg?.metaIndices.length ?? 0) === 0 ? (
+              <>No requests in {formatSegmentLabel(windowStart, windowEnd)}</>
+            ) : (
+              <>No requests in this window match your search or method filter.</>
+            )}
           </div>
         ) : (
           <div
@@ -1038,24 +1548,27 @@ function TimelineTrackView({
       </div>
 
       <SessionDensityStrip
-        meta={meta}
+        eventsForDensity={densityMeta}
         totalSpan={totalSpan}
         windowStart={windowStart}
         windowEnd={windowEnd}
+        densityIsFiltered={densityIsFiltered}
         onPickTime={(ms) => {
           const segIdx = findSegmentIndexForTime(segments, ms)
           setSegmentIndex(segIdx)
           const seg = segments[segIdx]
           if (!seg?.metaIndices.length) return
-          let bestIdx = seg.metaIndices[0]!
+          let bestIdx: number | null = null
           let bestDt = Infinity
           for (const mi of seg.metaIndices) {
+            if (!allowedSet.has(mi)) continue
             const dt = Math.abs(meta[mi]!.relativeTimestamp - ms)
             if (dt < bestDt) {
               bestDt = dt
               bestIdx = mi
             }
           }
+          if (bestIdx == null) return
           onSelectRequest(bestIdx)
           const seq = Number(meta[bestIdx]!.seq)
           requestAnimationFrame(() => {
@@ -1064,43 +1577,93 @@ function TimelineTrackView({
         }}
       />
 
-      <div className="grid gap-2 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
-        {meta.map((event, index) => {
-          const isSelected = selectedIndex === index
-          const isReplayActive =
-            currentReplaySeq != null && Number(event.seq) === currentReplaySeq
-          return (
-            <button
-              key={`label-${event.id}`}
-              ref={(el) => {
-                rowRefs.current[event.seq] = el
-              }}
-              type="button"
-              onClick={() => onSelectRequest(index)}
-              className={[
-                'rounded-lg border px-2.5 py-2 text-left transition-all duration-200 cursor-pointer',
-                isReplayActive
-                  ? 'border-emerald-500/55 bg-emerald-500/10 shadow-[0_0_16px_-4px_rgba(52,211,153,0.4)] ring-1 ring-emerald-400/20'
-                  : isSelected
-                    ? 'border-sky-500/45 bg-sky-500/10 ring-1 ring-sky-400/15'
-                    : 'border-zinc-800/90 bg-zinc-950/50 hover:border-zinc-600/80',
-              ].join(' ')}
-            >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span
-                  className={`text-[9px] font-mono font-bold px-1 py-0.5 rounded border shrink-0 ${getMethodColor(
-                    event.method || '',
-                  )}`}
-                >
-                  {event.method}
-                </span>
-                <span className="text-[10px] font-mono text-zinc-400 truncate">{formatOffsetMs(event.relativeTimestamp)}</span>
+      {trackTotal > 0 ? (
+        <div className="px-0.5">
+          <div className="flex items-center justify-end mb-2 text-[10px] font-mono text-zinc-600 tabular-nums">
+            {trackLabelFrom}–{trackLabelTo} of {trackTotal}
+          </div>
+
+          {trackCardLayout === 'grid' ? (
+              <div className="grid gap-2 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+                {trackPageRows.map(({ event, idx }) => {
+                  const isSelected = selectedIndex === idx
+                  const isReplayActive =
+                    currentReplaySeq != null && Number(event.seq) === currentReplaySeq
+                  return (
+                    <button
+                      key={`label-${event.id}`}
+                      ref={(el) => {
+                        rowRefs.current[event.seq] = el
+                      }}
+                      type="button"
+                      onClick={() => onSelectRequest(idx)}
+                      className={[
+                        'rounded-lg border px-2.5 py-2 text-left transition-all duration-200 cursor-pointer h-full min-h-0',
+                        isReplayActive
+                          ? 'border-emerald-500/55 bg-emerald-500/10 shadow-[0_0_16px_-4px_rgba(52,211,153,0.4)] ring-1 ring-emerald-400/20'
+                          : isSelected
+                            ? 'border-sky-500/45 bg-sky-500/10 ring-1 ring-sky-400/15'
+                            : 'border-zinc-800/90 bg-zinc-950/50 hover:border-zinc-600/80',
+                      ].join(' ')}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={`text-[9px] font-mono font-bold px-1 py-0.5 rounded border shrink-0 ${getMethodColor(
+                            event.method || '',
+                          )}`}
+                        >
+                          {event.method}
+                        </span>
+                        <span className="text-[10px] font-mono text-zinc-400 truncate">
+                          {formatOffsetMs(event.relativeTimestamp)}
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-mono text-zinc-200/90 truncate mt-1">{event.url}</div>
+                    </button>
+                  )
+                })}
               </div>
-              <div className="text-[11px] font-mono text-zinc-200/90 truncate mt-1">{event.url}</div>
-            </button>
-          )
-        })}
-      </div>
+            ) : (
+              <SessionRequestsCompactTable
+                rows={trackPageRows}
+                selectedIndex={selectedIndex}
+                onSelectRequest={onSelectRequest}
+                currentReplaySeq={currentReplaySeq}
+                rowRefs={rowRefs}
+                idPrefix="track-tbl"
+              />
+            )}
+
+            {trackPageCount > 1 ? (
+              <div
+                className="flex items-center justify-center gap-1 mt-3 pt-3 border-t border-zinc-800/60"
+                aria-label="Pagination for requests in this window"
+              >
+                <button
+                  type="button"
+                  aria-label="Previous page of requests"
+                  disabled={safeTrackPage <= 0}
+                  onClick={() => setTrackCardPage((p) => Math.max(0, p - 1))}
+                  className="flex items-center justify-center rounded-md border border-zinc-700/40 bg-zinc-950/60 p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/45 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+                </button>
+                <span className="min-w-30 text-center text-[11px] font-mono text-zinc-500 tabular-nums px-2">
+                  Page {safeTrackPage + 1} / {trackPageCount}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Next page of requests"
+                  disabled={safeTrackPage >= trackPageCount - 1}
+                  onClick={() => setTrackCardPage((p) => Math.min(trackPageCount - 1, p + 1))}
+                  className="flex items-center justify-center rounded-md border border-zinc-700/40 bg-zinc-950/60 p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/45 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" strokeWidth={2} />
+                </button>
+              </div>
+            ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

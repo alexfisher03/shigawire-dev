@@ -10,11 +10,11 @@ import (
 )
 
 // RegisterRoutes sets up all HTTP routes for the API
-func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState, rep *replay.ReplayState) {
+func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState, rep *replay.ReplayState, eb *control.EventBus) {
 	v1 := app.Group("/api/v1")
 
 	ph := handlers.NewProjectHandler(st)
-	sh := handlers.NewSessionHandler(st, rec)
+	sh := handlers.NewSessionHandler(st, rec, eb)
 	eh := handlers.NewEventHandler(st)
 	dh := handlers.NewDocsHandler(st)
 	rh := handlers.NewReplayHandler(st, rep, rec)
@@ -37,6 +37,7 @@ func RegisterRoutes(app *fiber.App, st *store.Store, rec *control.RecordingState
 
 	v1.Get("/record/status", sh.GlobalRecordingStatus)
 	v1.Get("/record/stream", sh.RecordStatusStream)
+	v1.Get("/events/stream", sh.EventStream)
 
 	v1.Get("/projects/:projectId/sessions/:sessionId/events", eh.ListEvents)
 	v1.Post("/projects/:projectId/sessions/:sessionId/events", eh.SeedEvent)

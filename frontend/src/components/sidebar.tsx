@@ -1,27 +1,31 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { Archive, Home, Plus, Settings, Pencil, X, Trash2 } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { Home, ListTree, Plus, Pencil, X, Trash2 } from "lucide-react";
 import { Project } from "@/lib/api";
-import { ProjectConfigForm } from "@/components/project-config-form";
 import { deleteProject } from "@/lib/api";
 
 interface SidebarProps {
   projects: Project[];
   selectedProjectId: string | null;
+  sessionBacklogOpen: boolean;
+  onSelectHome: () => void;
+  onSelectSessionBacklog: () => void;
   onSelectProject: (projectId: string | null) => void;
-  onProjectCreated: (project: Project) => void;
+  onOpenCreateProject: () => void;
   onProjectsDeleted?: (deletedIds: string[]) => void;
 }
 
 export function Sidebar({
   projects,
   selectedProjectId,
+  sessionBacklogOpen,
+  onSelectHome,
+  onSelectSessionBacklog,
   onSelectProject,
-  onProjectCreated,
+  onOpenCreateProject,
   onProjectsDeleted,
 }: SidebarProps) {
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -109,34 +113,32 @@ export function Sidebar({
     }
   };
 
-  const handleNewProject = () => {
-    setIsCreateOpen(true);
-  };
-
   return (
     <>
       <aside className="w-64 border-r border-blue-900/50 bg-black/60 flex flex-col h-full backdrop-blur-sm">
-        <nav className="flex-1 overflow-y-auto">
-          <div className="p-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto flex flex-col min-h-0">
+          <div className="p-4 space-y-1 shrink-0">
             <NavItem
               icon={<Home className="w-4 h-4" />}
-              label="All Sessions"
-              active={selectedProjectId === null}
-              onClick={() => onSelectProject(null)}
+              label="Home"
+              active={
+                selectedProjectId === null && !sessionBacklogOpen
+              }
+              onClick={onSelectHome}
             />
           </div>
 
-          <div className="px-4 py-6">
-            <div className="flex items-center justify-between mb-3">
+          <div className="px-4 py-4 flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between mb-3 shrink-0">
               <h3 className="text-xs font-mono font-semibold text-blue-400/70 uppercase tracking-wider">
                 Projects
               </h3>
 
               <div className="flex items-center gap-1">
-                {/* New Project */}
                 <button
-                  onClick={() => setIsCreateOpen(true)}
-                  className="p-1 hover:bg-blue-600/20 text-blue-400 hover:text-blue-200 transition-colors"
+                  type="button"
+                  onClick={onOpenCreateProject}
+                  className="p-1 hover:bg-blue-600/20 text-blue-400 hover:text-blue-200 transition-colors cursor-pointer"
                   title="New Project"
                 >
                   <Plus className="w-3 h-3" />
@@ -144,8 +146,9 @@ export function Sidebar({
 
                 {/* Select Mode */}
                 <button
+                  type="button"
                   onClick={toggleSelectMode}
-                  className={`p-1 transition-colors ${
+                  className={`p-1 transition-colors cursor-pointer ${
                     isSelectMode
                       ? "bg-blue-600/20 text-blue-200"
                       : "text-blue-400 hover:bg-blue-600/20 hover:text-blue-200"
@@ -179,7 +182,7 @@ export function Sidebar({
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1 overflow-y-auto min-h-0">
               {projects.map((project) => {
                 const isActive = selectedProjectId === project.id;
                 const isChecked = selectedIds.has(project.id);
@@ -217,19 +220,23 @@ export function Sidebar({
                 </div>
               )}
             </div>
+
+            <div className="mt-4 pt-4 border-t border-blue-900/40 shrink-0 space-y-1">
+              <p className="px-3 pb-1 text-[10px] font-mono uppercase tracking-wider text-blue-500/50">
+                Across projects
+              </p>
+              <NavItem
+                icon={<ListTree className="w-4 h-4" />}
+                label="All Sessions"
+                active={
+                  selectedProjectId === null && sessionBacklogOpen
+                }
+                onClick={onSelectSessionBacklog}
+              />
+            </div>
           </div>
         </nav>
       </aside>
-
-      {isCreateOpen && (
-        <ProjectConfigForm
-          onCreate={(newProj) => {
-            onProjectCreated(newProj);
-            setIsCreateOpen(false);
-          }}
-          onClose={() => setIsCreateOpen(false)}
-        />
-      )}
 
       {isConfirmDeleteOpen && (
         <ConfirmDeleteModal

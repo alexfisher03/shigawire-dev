@@ -19,6 +19,7 @@ export interface Session {
   project_id: string;
   name: string;
   created_at?: string;
+  updated_at?: string;
   sealed?: boolean;
   projectName?: string;
 }
@@ -178,10 +179,9 @@ export async function listAllSessions(): Promise<Session[]> {
   // Flatten arrays
   const allSessions = results.flat();
 
-  // Sort by created_at desc (newest first)
   return allSessions.sort((a, b) => {
-    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    const dateA = a.updated_at ? new Date(a.updated_at).getTime() : a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.updated_at ? new Date(b.updated_at).getTime() : b.created_at ? new Date(b.created_at).getTime() : 0;
     return dateB - dateA;
   });
 }

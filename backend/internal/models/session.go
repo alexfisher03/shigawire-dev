@@ -9,6 +9,7 @@ type Session struct {
 	ProjectId string `json:"project_id"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 	Sealed    bool   `json:"sealed"`
 }
 

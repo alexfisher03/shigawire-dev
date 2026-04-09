@@ -77,10 +77,14 @@ export function SessionList({ projectId, onSessionSelect }: SessionListProps) {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-mono font-semibold text-blue-200 tracking-wide">
-              {projectId ? 'Project Sessions' : 'All Sessions'}
+              {projectId ? 'Project Sessions' : 'Session backlog'}
             </h2>
             <p className="text-sm font-mono text-blue-400/70 mt-1">
-              {loading ? 'Loading...' : `${sessions.length} total sessions`}
+              {loading
+                ? 'Loading...'
+                : projectId
+                  ? `${sessions.length} total sessions`
+                  : `${sessions.length} sessions across all projects`}
             </p>
           </div>
           {projectId && (

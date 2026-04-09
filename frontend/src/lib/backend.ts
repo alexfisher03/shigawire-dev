@@ -33,6 +33,15 @@ export function getRecordingStreamUrl(): string {
   return `${getBackendBaseUrl()}/api/v1/record/stream`;
 }
 
+export function getEventStreamUrl(): string {
+  if (clientUsesRelativeApi()) {
+    return `${stripTrailingSlash(
+      process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8083",
+    )}/api/v1/events/stream`;
+  }
+  return `${getBackendBaseUrl()}/api/v1/events/stream`;
+}
+
 export function getWebSocketHttpOrigin() {
   const wsUrl = process.env.NEXT_PUBLIC_WS_BACKEND_URL;
   if (wsUrl) {
