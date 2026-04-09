@@ -50,3 +50,7 @@ If a session is recording, the request is forwarded to the configured upstream a
 cd frontend
 npm run tauri:build
 ```
+
+## Contributions
+
+Repository hygiene is summarized in [.github/MAINTAINERS.md](.github/MAINTAINERS.md).
