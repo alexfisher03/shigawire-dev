@@ -1,6 +1,6 @@
 # Shigawire
 
-An HTTP recording and replay proxy packaged as a desktop application. Shigawire sits between your HTTP client and an upstream service, capturing every request and response with full headers and bodies. Sensitive informationis automatically redacted before storage.
+An HTTP recording and replay proxy packaged as a desktop application. Shigawire sits between your HTTP client and an upstream service, capturing every request and response with full headers and bodies. Sensitive information is automatically redacted before storage.
 
 ## Architecture
 

@@ -52,6 +52,12 @@
           "y": 180
         }
       }
+    },
+    "windows": {
+      "nsis": {
+        "headerImage": "./images/nsis_header.bmp",
+        "sidebarImage": "./images/nsis_sidebar.bmp"
+      }
     }
   }
 }
