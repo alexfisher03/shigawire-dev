@@ -8,7 +8,10 @@ import { ReplayView } from "@/components/replay-view";
 import { ProjectView } from "@/components/project-view";
 import { HomeLanding } from "@/components/home-landing";
 import { ProjectConfigForm } from "@/components/project-config-form";
+import { OnboardingStepper } from "@/components/onboarding-stepper";
 import { listProjects, Project } from "@/lib/api";
+
+const ONBOARDING_KEY = "shigawire:onboarding-complete";
 
 export default function Home() {
   const [view, setView] = useState<"list" | "replay">("list");
@@ -22,10 +25,13 @@ export default function Home() {
   const [sessionBacklogOpen, setSessionBacklogOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Load projects on mount
   useEffect(() => {
     loadProjects();
+    try {
+      if (!localStorage.getItem(ONBOARDING_KEY)) setShowOnboarding(true);
+    } catch { /* SSR / restricted storage */ }
   }, []);
 
   async function loadProjects() {
@@ -145,7 +151,7 @@ export default function Home() {
       <div className="pointer-events-none fixed inset-0 opacity-[0.06] [background:repeating-linear-gradient(180deg,rgba(255,255,255,0.06)_0px,rgba(255,255,255,0.06)_1px,transparent_2px,transparent_6px)]" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,136,255,0.10)_0%,rgba(0,0,0,0.95)_55%,rgba(0,0,0,1)_100%)]" />
       <div className="relative flex flex-col h-full">
-        <Header />
+        <Header onShowGuide={() => setShowOnboarding(true)} />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar
             projects={projects}
@@ -168,6 +174,15 @@ export default function Home() {
             setCreateProjectOpen(false);
           }}
           onClose={() => setCreateProjectOpen(false)}
+        />
+      )}
+
+      {showOnboarding && (
+        <OnboardingStepper
+          onComplete={() => {
+            setShowOnboarding(false);
+            try { localStorage.setItem(ONBOARDING_KEY, "1"); } catch {}
+          }}
         />
       )}
     </div>
