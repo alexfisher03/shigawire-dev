@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { Save, X, Trash2, ChevronDown } from "lucide-react";
 import { ConfirmDialog } from "./confirm-dialog";
+import { useAppError } from "./app-error-provider";
 
 interface ProjectConfigFormProps {
   project?: Project;
@@ -30,6 +31,7 @@ export function ProjectConfigForm({
   onDelete,
   onClose,
 }: ProjectConfigFormProps) {
+  const { showError } = useAppError();
   const [config, setConfig] = useState<ProjectConfig>(DEFAULT_CONFIG);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -82,7 +84,12 @@ export function ProjectConfigForm({
         onUpdate(updated);
         onClose();
       } else {
-        alert("Failed to save project");
+        showError({
+          severity: "error",
+          title: "Could not save project",
+          message:
+            "The server did not accept the update. Check that the backend is running and try again.",
+        });
       }
     } else {
       const normalizedConfig: ProjectConfig = { ...DEFAULT_CONFIG, ...config };
@@ -92,7 +99,12 @@ export function ProjectConfigForm({
         onCreate(newProject);
         onClose();
       } else {
-        alert("Failed to create project");
+        showError({
+          severity: "error",
+          title: "Could not create project",
+          message:
+            "The project could not be created. Check that the backend is running and try again.",
+        });
       }
     }
     setLoading(false);
@@ -106,7 +118,12 @@ export function ProjectConfigForm({
       onDelete(project.id);
       onClose();
     } else if (!success) {
-      alert("Failed to delete project");
+      showError({
+        severity: "critical",
+        title: "Could not delete project",
+        message:
+          "The project was not removed. Close other clients using it, verify the backend, and try again.",
+      });
     }
     setLoading(false);
     setShowDeleteConfirm(false);

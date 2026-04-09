@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Shigawire",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "dev.shigawire.desktop",
   "build": {
     "frontendDist": "../out",
@@ -38,6 +38,7 @@
       "icons/icon.ico"
     ],
     "macOS": {
+      "signingIdentity": "-",
       "dmg": {
         "windowSize": {
           "width": 660,
@@ -57,7 +58,8 @@
       "nsis": {
         "installerIcon": "./icons/icon.ico",
         "headerImage": "./images/nsis_header.bmp",
-        "sidebarImage": "./images/nsis_sidebar.bmp"
+        "sidebarImage": "./images/nsis_sidebar.bmp",
+        "installerHooks": "./installer-hooks.nsh"
       }
     }
   }

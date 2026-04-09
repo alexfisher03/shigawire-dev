@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Plus } from "lucide-react";
 import { createSession, Session } from "@/lib/api";
+import { useAppError } from "@/components/app-error-provider";
 
 interface CreateSessionModalProps {
   projectId: string;
@@ -16,6 +17,7 @@ export function CreateSessionModal({
   onClose,
   onCreated,
 }: CreateSessionModalProps) {
+  const { showError } = useAppError();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -41,7 +43,12 @@ export function CreateSessionModal({
       onCreated(newSession);
       onClose();
     } else {
-      alert("Failed to create session");
+      showError({
+        severity: "error",
+        title: "Could not create session",
+        message:
+          "The server did not create this session. Check that the backend is running and try again.",
+      });
     }
   };
 

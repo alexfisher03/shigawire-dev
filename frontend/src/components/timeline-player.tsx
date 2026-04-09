@@ -483,13 +483,9 @@ const TRACK_DOT_CLASS =
 const TIMELINE_ZOOM_MIN = 1
 const TIMELINE_ZOOM_MAX = 8
 
-/** List — window mode: max cards per page (responsive grid). */
 const LIST_GRID_PAGE_SIZE = 12
-/** List — all-session table rows per page. */
 const LIST_ALL_TABLE_PAGE_SIZE = 24
-/** Track layout — grid cards per page. */
 const TRACK_GRID_PAGE_SIZE = 12
-/** Track layout — compact table rows per page. */
 const TRACK_TABLE_PAGE_SIZE = 24
 
 type ViewMode = 'list' | 'track'

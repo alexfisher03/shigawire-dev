@@ -22,6 +22,7 @@ import {
   getReplayWsUrl,
 } from '@/lib/api'
 import { ConfirmDialog } from './confirm-dialog'
+import { useAppError } from './app-error-provider'
 import { useRecordingStatusStream } from '@/hooks/use-recording-status-stream'
 
 interface ReplayViewProps {
@@ -32,6 +33,7 @@ interface ReplayViewProps {
 }
 
 export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: ReplayViewProps) {
+  const { showError } = useAppError()
   const [speed, setSpeed] = useState(1)
   const [selectedRequest, setSelectedRequest] = useState(0)
   const [session, setSession] = useState<Session | null>(null)
@@ -54,6 +56,8 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
   useEffect(() => {
     if (!sessionId || !projectId) return
 
+    let cancelled = false
+
     async function loadSessionData() {
       setLoading(true)
       try {
@@ -64,18 +68,38 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
 
         if (sessionData) {
           setSession(sessionData)
+        } else if (!cancelled) {
+          showError({
+            severity: 'error',
+            title: 'Session unavailable',
+            message:
+              'This session could not be loaded. It may have been deleted, or the backend is unreachable.',
+          })
         }
 
         setEvents(eventsData)
       } catch (error) {
         console.error('Error loading session data:', error)
+        if (!cancelled) {
+          showError({
+            severity: 'error',
+            title: 'Failed to load session',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'An unexpected error occurred while loading session data.',
+          })
+        }
       } finally {
         setLoading(false)
       }
     }
 
-    loadSessionData()
-  }, [sessionId, projectId])
+    void loadSessionData()
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, projectId, showError])
 
   const liveCapture =
     Boolean(projectId) &&
@@ -152,14 +176,24 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
       if (status.session_id === sessionId) {
         return;
       } else {
-        alert("Session currently running on another session.");
+        showError({
+          severity: 'warning',
+          title: 'Recording already active',
+          message:
+            'Another session is currently recording. Stop that recording first, then start capture here.',
+        })
         return;
       }
     }
 
     const success = await startRecording(projectId, sessionId);
     if (!success) {
-      alert("Failed to start recording.");
+      showError({
+        severity: 'error',
+        title: 'Could not start recording',
+        message:
+          'The server did not start capture for this session. Check the backend and try again.',
+      })
       return;
     }
     await refreshRecordingStatus();
@@ -169,7 +203,12 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
     if (!projectId || !sessionId) return;
     const success = await stopRecording(projectId, sessionId);
     if (!success) {
-      alert("Failed to stop recording.");
+      showError({
+        severity: 'error',
+        title: 'Could not stop recording',
+        message:
+          'Recording may still be active on the server. Refresh status or check the backend logs.',
+      })
       return;
     }
     await refreshRecordingStatus();
@@ -184,7 +223,12 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
       setShowSealConfirm(false)
       setSession((prev) => prev ? { ...prev, sealed: true } : prev)
     } else {
-      alert('Failed to seal session.')
+      showError({
+        severity: 'critical',
+        title: 'Could not seal session',
+        message:
+          'End capture failed. The session may still accept recording until this succeeds. Check the backend and try again.',
+      })
     }
   }
 
@@ -198,7 +242,12 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
       const result = await startReplay(projectId, sessionId, speed)
       if (!result) {
         setCurrentReplaySeq(null)
-        alert('Failed to start replay.')
+        showError({
+          severity: 'error',
+          title: 'Could not start replay',
+          message:
+            'The replay service did not start. Ensure the session has events and the backend is healthy.',
+        })
         return
       }
       setReplayId(result.replay_id)
@@ -431,7 +480,12 @@ export function ReplayView({ projectId, sessionId, onBack, onDeleteSession }: Re
                 onDeleteSession?.()
                 onBack()
               } else {
-                alert('Failed to delete session')
+                showError({
+                  severity: 'error',
+                  title: 'Could not delete session',
+                  message:
+                    'The session was not removed. Check the backend and try again.',
+                })
               }
             }}
             onCancel={() => setShowDeleteConfirm(false)}
