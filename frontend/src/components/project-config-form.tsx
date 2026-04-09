@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Project,
   ProjectConfig,
@@ -8,7 +8,7 @@ import {
   createProject,
   deleteProject,
 } from "@/lib/api";
-import { Save, X, Trash2 } from "lucide-react";
+import { Save, X, Trash2, ChevronDown } from "lucide-react";
 import { ConfirmDialog } from "./confirm-dialog";
 
 interface ProjectConfigFormProps {
@@ -21,6 +21,8 @@ interface ProjectConfigFormProps {
 
 const DEFAULT_CONFIG: ProjectConfig = { targetScheme: "http" };
 
+const SCHEME_OPTIONS = ["http", "https"] as const;
+
 export function ProjectConfigForm({
   project,
   onUpdate,
@@ -32,6 +34,8 @@ export function ProjectConfigForm({
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [schemeOpen, setSchemeOpen] = useState(false);
+  const schemePickerRef = useRef<HTMLDivElement>(null);
 
   // Parse config on mount or project change
   useEffect(() => {
@@ -50,6 +54,23 @@ export function ProjectConfigForm({
       setConfig({});
     }
   }, [project]);
+
+  useEffect(() => {
+    if (!schemeOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (schemePickerRef.current?.contains(e.target as Node)) return;
+      setSchemeOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSchemeOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [schemeOpen]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,6 +113,7 @@ export function ProjectConfigForm({
   };
 
   const title = project ? "Project Configuration" : "Create New Project";
+  const activeScheme = (config.targetScheme || "http") as "http" | "https";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -149,22 +171,59 @@ export function ProjectConfigForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-mono text-blue-400 uppercase tracking-wider">
+                  <label
+                    htmlFor="scheme-trigger"
+                    className="block text-xs font-mono text-blue-400 uppercase tracking-wider"
+                  >
                     Scheme
                   </label>
-                  <select
-                    value={config.targetScheme || "http"}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        targetScheme: e.target.value as "http" | "https",
-                      })
-                    }
-                    className="w-full bg-blue-900/10 border border-blue-900/50 rounded px-4 py-2 text-blue-200 font-mono focus:outline-none focus:border-blue-600/50"
-                  >
-                    <option value="http">http</option>
-                    <option value="https">https</option>
-                  </select>
+                  <div ref={schemePickerRef} className="relative">
+                    <button
+                      type="button"
+                      id="scheme-trigger"
+                      aria-haspopup="listbox"
+                      aria-expanded={schemeOpen}
+                      onClick={() => setSchemeOpen((o) => !o)}
+                      className="flex w-full items-center justify-between gap-2 rounded border border-blue-900/50 bg-blue-900/10 px-4 py-2 text-left font-mono text-blue-200 transition-colors hover:border-blue-700/60 focus:border-blue-600/50 focus:outline-none cursor-pointer"
+                    >
+                      <span>{activeScheme}</span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-blue-400/80 transition-transform ${schemeOpen ? "rotate-180" : ""}`}
+                        aria-hidden
+                      />
+                    </button>
+                    {schemeOpen ? (
+                      <ul
+                        role="listbox"
+                        aria-label="URL scheme"
+                        className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded border border-blue-900/60 bg-[#0a0a0a] py-1 shadow-lg shadow-black/40"
+                      >
+                        {SCHEME_OPTIONS.map((opt) => (
+                          <li key={opt} role="presentation">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={opt === activeScheme}
+                              onClick={() => {
+                                setConfig({
+                                  ...config,
+                                  targetScheme: opt,
+                                });
+                                setSchemeOpen(false);
+                              }}
+                              className={`w-full px-4 py-2 text-left font-mono text-sm transition-colors cursor-pointer ${
+                                opt === activeScheme
+                                  ? "bg-blue-600/25 text-blue-100"
+                                  : "text-blue-200/90 hover:bg-blue-900/40"
+                              }`}
+                            >
+                              {opt}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 

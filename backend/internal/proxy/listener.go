@@ -31,6 +31,7 @@ type Listener struct {
 	Addr            string
 	DB              *sql.DB
 	Rec             *control.RecordingState
+	EB              *control.EventBus
 	DefaultUpstream string
 	server          *http.Server
 }
@@ -48,7 +49,7 @@ type upstreamCheckResponse struct {
 	Error      string `json:"error,omitempty"`
 }
 
-func NewListenerFromEnv(db *sql.DB, rec *control.RecordingState) *Listener {
+func NewListenerFromEnv(db *sql.DB, rec *control.RecordingState, eb *control.EventBus) *Listener {
 	proxyPort := os.Getenv("PROXY_PORT")
 	if proxyPort == "" {
 		proxyPort = "9090"
@@ -58,6 +59,7 @@ func NewListenerFromEnv(db *sql.DB, rec *control.RecordingState) *Listener {
 		Addr:            ":" + proxyPort,
 		DB:              db,
 		Rec:             rec,
+		EB:              eb,
 		DefaultUpstream: strings.TrimSpace(os.Getenv("DEFAULT_UPSTREAM_BASE_URL")),
 	}
 }
@@ -297,6 +299,20 @@ func (l *Listener) persistEvent(
 
 	if err := store.InsertEvent(l.DB, e); err != nil {
 		log.Printf("proxy: failed to persist event: %v", err)
+	} else {
+		if err := store.TouchSessionUpdatedAt(l.DB, sessionID, endedAt.Format(time.RFC3339Nano)); err != nil {
+			log.Printf("proxy: failed to touch session updated_at: %v", err)
+		}
+		if l.EB != nil {
+			l.EB.Publish(control.EventNotification{
+				SessionID:  sessionID,
+				EventID:    e.Id,
+				Method:     e.Method,
+				URL:        e.URL,
+				Status:     e.Status,
+				TotalCount: e.Seq,
+			})
+		}
 	}
 }
 

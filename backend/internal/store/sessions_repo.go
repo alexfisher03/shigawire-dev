@@ -8,9 +8,12 @@ import (
 )
 
 func InsertSession(db *sql.DB, s *models.Session) error {
+	if s.UpdatedAt == "" {
+		s.UpdatedAt = s.CreatedAt
+	}
 	_, err := db.Exec(
-		`INSERT INTO sessions(id, project_id, name, created_at, sealed) VALUES(?, ?, ?, ?, ?)`,
-		s.Id, s.ProjectId, s.Name, s.CreatedAt, boolToInt(s.Sealed),
+		`INSERT INTO sessions(id, project_id, name, created_at, updated_at, sealed) VALUES(?, ?, ?, ?, ?, ?)`,
+		s.Id, s.ProjectId, s.Name, s.CreatedAt, s.UpdatedAt, boolToInt(s.Sealed),
 	)
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)
@@ -20,10 +23,10 @@ func InsertSession(db *sql.DB, s *models.Session) error {
 
 func ListSessionsByProject(db *sql.DB, projectId string) ([]*models.Session, error) {
 	rows, err := db.Query(
-		`SELECT id, project_id, name, created_at, sealed
+		`SELECT id, project_id, name, created_at, updated_at, sealed
 		 FROM sessions
 		 WHERE project_id = ?
-		 ORDER BY created_at DESC`,
+		 ORDER BY updated_at DESC`,
 		projectId,
 	)
 	if err != nil {
@@ -35,7 +38,7 @@ func ListSessionsByProject(db *sql.DB, projectId string) ([]*models.Session, err
 	for rows.Next() {
 		var s models.Session
 		var sealed int
-		if err := rows.Scan(&s.Id, &s.ProjectId, &s.Name, &s.CreatedAt, &sealed); err != nil {
+		if err := rows.Scan(&s.Id, &s.ProjectId, &s.Name, &s.CreatedAt, &s.UpdatedAt, &sealed); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
 		s.Sealed = sealed != 0
@@ -52,11 +55,11 @@ func GetSession(db *sql.DB, sessionId string) (*models.Session, error) {
 	var sealed int
 
 	err := db.QueryRow(
-		`SELECT id, project_id, name, created_at, sealed
+		`SELECT id, project_id, name, created_at, updated_at, sealed
 		 FROM sessions
 		 WHERE id = ?`,
 		sessionId,
-	).Scan(&s.Id, &s.ProjectId, &s.Name, &s.CreatedAt, &sealed)
+	).Scan(&s.Id, &s.ProjectId, &s.Name, &s.CreatedAt, &s.UpdatedAt, &sealed)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -67,6 +70,14 @@ func GetSession(db *sql.DB, sessionId string) (*models.Session, error) {
 
 	s.Sealed = sealed != 0
 	return &s, nil
+}
+
+func TouchSessionUpdatedAt(db *sql.DB, sessionId string, ts string) error {
+	_, err := db.Exec(`UPDATE sessions SET updated_at = ? WHERE id = ?`, ts, sessionId)
+	if err != nil {
+		return fmt.Errorf("touch session updated_at: %w", err)
+	}
+	return nil
 }
 
 func SealSession(db *sql.DB, sessionId string) error {

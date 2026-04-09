@@ -19,6 +19,7 @@ func InitSchema(db *sql.DB) error {
 			project_id TEXT NOT NULL,
 			name TEXT NOT NULL,
 			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT '',
 			sealed INTEGER NOT NULL,
 			FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
 		);`,
@@ -61,5 +62,19 @@ func InitSchema(db *sql.DB) error {
 			return fmt.Errorf("schema exec failed: %w", err)
 		}
 	}
+
+	migrations := []string{
+		`ALTER TABLE sessions ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, m := range migrations {
+		_, _ = db.Exec(m)
+	}
+
+	if _, err := db.Exec(
+		`UPDATE sessions SET updated_at = created_at WHERE updated_at = ''`,
+	); err != nil {
+		return fmt.Errorf("backfill updated_at: %w", err)
+	}
+
 	return nil
 }

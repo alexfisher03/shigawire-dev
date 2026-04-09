@@ -47,10 +47,11 @@ func main() {
 		log.Fatal("failed to initialize recording state: %w", err)
 	}
 
+	eb := control.NewEventBus()
 	rep := replay.NewReplayState()
-	api.RegisterRoutes(app, store, rec, rep)
+	api.RegisterRoutes(app, store, rec, rep, eb)
 
-	proxyListener := proxy.NewListenerFromEnv(store.DB, rec)
+	proxyListener := proxy.NewListenerFromEnv(store.DB, rec, eb)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -63,7 +64,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8083"
 	}
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Server starting on %s", addr)
