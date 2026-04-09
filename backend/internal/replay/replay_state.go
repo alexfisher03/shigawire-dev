@@ -25,12 +25,12 @@ type ReplayState struct {
 	currentSeq int
 	speed      float64
 
-	stopC   chan struct{}
-	pauseC  chan struct{}
-	resumeC chan struct{}
-	stepC   chan struct{}
+	stopC       chan struct{}
+	pauseC      chan struct{}
+	resumeC     chan struct{}
+	stepC       chan struct{}
 	subscribers map[string]chan []byte
-	speedC  chan struct{}
+	speedC      chan struct{}
 }
 
 func NewReplayState() *ReplayState {

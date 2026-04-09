@@ -54,6 +54,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
@@ -75,3 +89,85 @@ jobs:
       - name: cargo check
         working-directory: frontend/src-tauri
         run: cargo check
+
+  go-format:
+    name: Backend (gofmt)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Verify Go formatting
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "Run gofmt on:"
+            echo "$out"
+            exit 1
+          fi
+
+  rust-format:
+    name: Tauri (rustfmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: cargo fmt --check
+        working-directory: frontend/src-tauri
+        run: cargo fmt --all -- --check
+
+  workflow-lint:
+    name: Workflows (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install and run actionlint
+        run: |
+          set -euo pipefail
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+  ci-passed:
+    name: CI passed
+    runs-on: ubuntu-latest
+    needs:
+      - frontend
+      - backend
+      - tauri
+      - go-format
+      - rust-format
+      - workflow-lint
+    if: always()
+    steps:
+      - name: Require all jobs successful
+        run: |
+          echo "frontend: ${{ needs.frontend.result }}"
+          echo "backend: ${{ needs.backend.result }}"
+          echo "tauri: ${{ needs.tauri.result }}"
+          echo "go-format: ${{ needs.go-format.result }}"
+          echo "rust-format: ${{ needs.rust-format.result }}"
+          echo "workflow-lint: ${{ needs.workflow-lint.result }}"
+          for r in \
+            "${{ needs.frontend.result }}" \
+            "${{ needs.backend.result }}" \
+            "${{ needs.tauri.result }}" \
+            "${{ needs.go-format.result }}" \
+            "${{ needs.rust-format.result }}" \
+            "${{ needs.workflow-lint.result }}"; do
+            if [ "$r" != "success" ]; then
+              echo "One or more CI jobs did not succeed."
+              exit 1
+            fi
+          done
+          echo "All CI jobs succeeded."

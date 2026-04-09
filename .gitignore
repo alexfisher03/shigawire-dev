@@ -76,3 +76,6 @@ exports/
 
 *.log
 logs/
+
+# actionlint binary from local workflow checks
+/actionlint
