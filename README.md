@@ -50,5 +50,3 @@ If a session is recording, the request is forwarded to the configured upstream a
 cd frontend
 npm run tauri:build
 ```
-
-Produces a `.dmg` (macOS) or NSIS installer (Windows) in `frontend/src-tauri/target/release/bundle/`. The Go sidecar is compiled and embedded automatically.

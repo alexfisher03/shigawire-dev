@@ -11,7 +11,11 @@ import { ProjectConfigForm } from "@/components/project-config-form";
 import { OnboardingStepper } from "@/components/onboarding-stepper";
 import { listProjects, Project } from "@/lib/api";
 
-const ONBOARDING_KEY = "shigawire:onboarding-complete";
+/** @deprecated migrated to ONBOARDING_MARKER_KEY in production desktop builds */
+const ONBOARDING_LEGACY_KEY = "shigawire:onboarding-complete";
+const ONBOARDING_MARKER_KEY = "shigawire:onboarding-install-marker";
+
+type OnboardingMarker = { v: string; m: number };
 
 export default function Home() {
   const [view, setView] = useState<"list" | "replay">("list");
@@ -28,10 +32,70 @@ export default function Home() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    loadProjects();
-    try {
-      if (!localStorage.getItem(ONBOARDING_KEY)) setShowOnboarding(true);
-    } catch { /* SSR / restricted storage */ }
+    let cancelled = false;
+    void loadProjects();
+
+    (async () => {
+      try {
+        const isDev = process.env.NODE_ENV === "development";
+        const isTauri =
+          typeof window !== "undefined" &&
+          "__TAURI_INTERNALS__" in window;
+
+        if (isDev || !isTauri) {
+          if (!localStorage.getItem(ONBOARDING_LEGACY_KEY)) {
+            if (!cancelled) setShowOnboarding(true);
+          }
+          return;
+        }
+
+        const [{ getVersion }, { invoke }] = await Promise.all([
+          import("@tauri-apps/api/app"),
+          import("@tauri-apps/api/core"),
+        ]);
+        const version = await getVersion();
+        const mtime = await invoke<number | null>("app_executable_mtime_unix");
+        if (mtime == null) {
+          if (!localStorage.getItem(ONBOARDING_LEGACY_KEY) && !cancelled) {
+            setShowOnboarding(true);
+          }
+          return;
+        }
+
+        const markerRaw = localStorage.getItem(ONBOARDING_MARKER_KEY);
+        if (localStorage.getItem(ONBOARDING_LEGACY_KEY) && !markerRaw) {
+          const marker: OnboardingMarker = { v: version, m: mtime };
+          localStorage.setItem(ONBOARDING_MARKER_KEY, JSON.stringify(marker));
+          localStorage.removeItem(ONBOARDING_LEGACY_KEY);
+          return;
+        }
+
+        if (!markerRaw) {
+          if (!cancelled) setShowOnboarding(true);
+          return;
+        }
+
+        let parsed: OnboardingMarker;
+        try {
+          parsed = JSON.parse(markerRaw) as OnboardingMarker;
+        } catch {
+          if (!cancelled) setShowOnboarding(true);
+          return;
+        }
+
+        if (parsed.v !== version || parsed.m !== mtime) {
+          if (!cancelled) setShowOnboarding(true);
+        }
+      } catch {
+        if (!localStorage.getItem(ONBOARDING_LEGACY_KEY) && !cancelled) {
+          setShowOnboarding(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function loadProjects() {
@@ -181,7 +245,42 @@ export default function Home() {
         <OnboardingStepper
           onComplete={() => {
             setShowOnboarding(false);
-            try { localStorage.setItem(ONBOARDING_KEY, "1"); } catch {}
+            void (async () => {
+              try {
+                const isDev = process.env.NODE_ENV === "development";
+                const isTauri =
+                  typeof window !== "undefined" &&
+                  "__TAURI_INTERNALS__" in window;
+                if (isDev || !isTauri) {
+                  localStorage.setItem(ONBOARDING_LEGACY_KEY, "1");
+                  return;
+                }
+                const [{ getVersion }, { invoke }] = await Promise.all([
+                  import("@tauri-apps/api/app"),
+                  import("@tauri-apps/api/core"),
+                ]);
+                const version = await getVersion();
+                const mtime = await invoke<number | null>(
+                  "app_executable_mtime_unix",
+                );
+                if (mtime != null) {
+                  const marker: OnboardingMarker = { v: version, m: mtime };
+                  localStorage.setItem(
+                    ONBOARDING_MARKER_KEY,
+                    JSON.stringify(marker),
+                  );
+                  localStorage.removeItem(ONBOARDING_LEGACY_KEY);
+                } else {
+                  localStorage.setItem(ONBOARDING_LEGACY_KEY, "1");
+                }
+              } catch {
+                try {
+                  localStorage.setItem(ONBOARDING_LEGACY_KEY, "1");
+                } catch {
+                  /* ignore */
+                }
+              }
+            })();
           }}
         />
       )}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Home, ListTree, Plus, Pencil, X, Trash2 } from "lucide-react";
+import { Home, ListTree, Plus, Pencil, X, Trash2, Check } from "lucide-react";
 import { Project } from "@/lib/api";
 import { deleteProject } from "@/lib/api";
 
@@ -201,13 +201,26 @@ export function Sidebar({
                     }`}
                   >
                     {isSelectMode && (
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleProjectSelected(project.id)}
+                      <label
+                        className="relative flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center"
                         onClick={(e) => e.stopPropagation()}
-                        className="accent-blue-500"
-                      />
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleProjectSelected(project.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="peer sr-only focus-visible:outline-none"
+                        />
+                        <span
+                          className="pointer-events-none flex h-4 w-4 items-center justify-center rounded border border-blue-600/45 bg-blue-950/50 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/40 peer-checked:border-blue-500 peer-checked:bg-blue-600/90"
+                          aria-hidden
+                        >
+                          {isChecked ? (
+                            <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                          ) : null}
+                        </span>
+                      </label>
                     )}
                     <span className="truncate">{project.name}</span>
                   </div>

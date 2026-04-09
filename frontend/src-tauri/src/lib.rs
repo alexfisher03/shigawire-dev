@@ -1,3 +1,15 @@
+#[tauri::command]
+fn app_executable_mtime_unix() -> Option<u64> {
+  let meta = std::env::current_exe().ok()?.metadata().ok()?;
+  let modified = meta.modified().ok()?;
+  Some(
+    modified
+      .duration_since(std::time::UNIX_EPOCH)
+      .ok()?
+      .as_secs(),
+  )
+}
+
 #[cfg(not(debug_assertions))]
 use std::sync::Mutex;
 
@@ -22,6 +34,7 @@ impl Drop for SidecarChild {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
+    .invoke_handler(tauri::generate_handler![app_executable_mtime_unix])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
