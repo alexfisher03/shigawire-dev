@@ -11,7 +11,11 @@ fn app_executable_mtime_unix() -> Option<u64> {
 }
 
 #[cfg(not(debug_assertions))]
+use std::net::{SocketAddr, TcpStream};
+#[cfg(not(debug_assertions))]
 use std::sync::Mutex;
+#[cfg(not(debug_assertions))]
+use std::time::{Duration, Instant};
 
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::process::CommandChild;
@@ -69,7 +73,8 @@ pub fn run() {
                     })?;
 
                 app.manage(SidecarChild(Mutex::new(Some(child))));
-                log::info!("shigawire-server sidecar started on port 18453");
+                wait_for_sidecar_tcp(18453);
+                log::info!("shigawire-server sidecar ready on port 18453");
             }
 
             Ok(())

@@ -38,9 +38,8 @@ export function getBackendBaseUrl() {
   return stripTrailingSlash(url);
 }
 
-/** Retries on connection failure so the UI works while the embedded sidecar binds its port. */
-const API_FETCH_RETRIES = 15;
-const API_FETCH_RETRY_MS = 150;
+const API_FETCH_RETRIES = 35;
+const API_FETCH_RETRY_MS = 175;
 
 export async function apiFetch(
   input: string | URL | Request,
