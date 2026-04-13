@@ -165,6 +165,11 @@ func (l *Listener) handleProxy(w http.ResponseWriter, r *http.Request) {
 	copyHeaders(upReq.Header, r.Header)
 	removeHopByHopHeaders(upReq.Header)
 
+	if pu, perr := url.Parse(targetURL); perr == nil && pu.Host != "" {
+		upReq.Host = pu.Host
+		upReq.Header.Del("Host")
+	}
+
 	startedAt := time.Now().UTC()
 
 	client := &http.Client{Timeout: 30 * time.Second}
