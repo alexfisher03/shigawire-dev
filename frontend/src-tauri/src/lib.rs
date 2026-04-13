@@ -27,11 +27,30 @@ struct SidecarChild(Mutex<Option<CommandChild>>);
 impl Drop for SidecarChild {
     fn drop(&mut self) {
         if let Ok(mut guard) = self.0.lock() {
-            if let Some(mut child) = guard.take() {
+            if let Some(child) = guard.take() {
                 let _ = child.kill();
             }
         }
     }
+}
+
+#[cfg(not(debug_assertions))]
+fn wait_for_sidecar_tcp(port: u16) {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline {
+        match TcpStream::connect_timeout(&addr, Duration::from_millis(400)) {
+            Ok(_) => {
+                log::info!("sidecar accepting connections on 127.0.0.1:{}", port);
+                return;
+            }
+            Err(_) => std::thread::sleep(Duration::from_millis(80)),
+        }
+    }
+    log::warn!(
+        "timed out waiting for sidecar on port {}; UI may show errors until the server is ready",
+        port
+    );
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
