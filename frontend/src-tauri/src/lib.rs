@@ -11,6 +11,8 @@ fn app_executable_mtime_unix() -> Option<u64> {
 }
 
 #[cfg(not(debug_assertions))]
+use std::io::{Read, Write};
+#[cfg(not(debug_assertions))]
 use std::net::{SocketAddr, TcpStream};
 #[cfg(not(debug_assertions))]
 use std::sync::Mutex;
@@ -35,20 +37,47 @@ impl Drop for SidecarChild {
 }
 
 #[cfg(not(debug_assertions))]
-fn wait_for_sidecar_tcp(port: u16) {
+fn http_response_status_ok(buf: &[u8]) -> bool {
+    let line_end = buf
+        .iter()
+        .position(|&b| b == b'\r' || b == b'\n')
+        .unwrap_or(buf.len());
+    let line = &buf[..line_end];
+    // "HTTP/1.x 200 ..."
+    line.windows(3).any(|w| w == b"200")
+}
+
+/// Wait until Fiber returns 200 for GET /healthz (TCP accept can happen before HTTP is fully ready).
+#[cfg(not(debug_assertions))]
+fn wait_for_sidecar_http(port: u16) {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + Duration::from_secs(45);
     while Instant::now() < deadline {
-        match TcpStream::connect_timeout(&addr, Duration::from_millis(400)) {
-            Ok(_) => {
-                log::info!("sidecar accepting connections on 127.0.0.1:{}", port);
-                return;
+        match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
+            Ok(mut stream) => {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                let req = concat!(
+                    "GET /healthz HTTP/1.1\r\n",
+                    "Host: 127.0.0.1\r\n",
+                    "Connection: close\r\n",
+                    "\r\n"
+                );
+                if stream.write_all(req.as_bytes()).is_ok() {
+                    let mut buf = [0u8; 256];
+                    if let Ok(n) = stream.read(&mut buf) {
+                        if n > 0 && http_response_status_ok(&buf[..n]) {
+                            log::info!("sidecar HTTP /healthz ready on 127.0.0.1:{}", port);
+                            return;
+                        }
+                    }
+                }
             }
-            Err(_) => std::thread::sleep(Duration::from_millis(80)),
+            Err(_) => {}
         }
+        std::thread::sleep(Duration::from_millis(100));
     }
     log::warn!(
-        "timed out waiting for sidecar on port {}; UI may show errors until the server is ready",
+        "timed out waiting for sidecar HTTP on port {}; UI may show errors until the server is ready",
         port
     );
 }
@@ -92,7 +121,7 @@ pub fn run() {
                     })?;
 
                 app.manage(SidecarChild(Mutex::new(Some(child))));
-                wait_for_sidecar_tcp(18453);
+                wait_for_sidecar_http(18453);
                 log::info!("shigawire-server sidecar ready on port 18453");
             }
 
