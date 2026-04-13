@@ -1,4 +1,4 @@
-import { getBackendBaseUrl, getWebSocketHttpOrigin } from "./backend";
+import { apiFetch, getBackendBaseUrl, getWebSocketHttpOrigin } from "./backend";
 
 export interface ProjectConfig {
   targetName?: string;
@@ -61,7 +61,7 @@ const UI_SENSITIVE_JSON_KEYS = new Set(["password", "token", "secret"]);
 export async function listProjects(): Promise<Project[]> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects`, {
+    const response = await apiFetch(`${base}/api/v1/projects`, {
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
     });
@@ -77,7 +77,7 @@ export async function listProjects(): Promise<Project[]> {
 export async function createProject(name: string, config: ProjectConfig = {}): Promise<Project | null> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects`, {
+    const response = await apiFetch(`${base}/api/v1/projects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, config }),
@@ -96,7 +96,7 @@ export async function createProject(name: string, config: ProjectConfig = {}): P
 export async function getProject(projectId: string): Promise<Project | null> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}`, {
       headers: { "Content-Type": "application/json" },
     });
     if (!response.ok) return null;
@@ -110,7 +110,7 @@ export async function getProject(projectId: string): Promise<Project | null> {
 export async function updateProject(projectId: string, name: string, config: ProjectConfig): Promise<Project | null> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, config }),
@@ -129,7 +129,7 @@ export async function updateProject(projectId: string, name: string, config: Pro
 export async function deleteProject(projectId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}`, {
       method: "DELETE",
     });
     if (!response.ok) {
@@ -149,7 +149,7 @@ export async function listSessions(projectId: string): Promise<Session[]> {
   const base = getBackendBaseUrl();
 
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions`, {
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
     });
@@ -190,7 +190,7 @@ export async function getSession(projectId: string, sessionId: string): Promise<
   const base = getBackendBaseUrl();
 
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}`, {
       headers: { "Content-Type": "application/json" },
     });
 
@@ -209,7 +209,7 @@ export async function getSessionEvents(projectId: string, sessionId: string): Pr
   const base = getBackendBaseUrl();
 
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/events`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/events`, {
       headers: { "Content-Type": "application/json" },
     });
 
@@ -272,7 +272,7 @@ export async function createSession(projectId: string, name: string): Promise<Se
   const base = getBackendBaseUrl();
 
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -293,7 +293,7 @@ export async function createSession(projectId: string, name: string): Promise<Se
 export async function deleteSession(projectId: string, sessionId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}`, {
       method: "DELETE",
     });
     if (!response.ok) {
@@ -312,7 +312,7 @@ export async function deleteSession(projectId: string, sessionId: string): Promi
 export async function getGlobalRecordingStatus(): Promise<RecordingStatus | null> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/record/status`, {
+    const response = await apiFetch(`${base}/api/v1/record/status`, {
       cache: "no-store",
     });
     if (!response.ok) return null;
@@ -326,7 +326,7 @@ export async function getGlobalRecordingStatus(): Promise<RecordingStatus | null
 export async function startRecording(projectId: string, sessionId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/record/start`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/record/start`, {
       method: "POST",
     });
     if (!response.ok) {
@@ -343,7 +343,7 @@ export async function startRecording(projectId: string, sessionId: string): Prom
 export async function stopRecording(projectId: string, sessionId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/record/stop`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/record/stop`, {
       method: "POST",
     });
     if (!response.ok) {
@@ -360,7 +360,7 @@ export async function stopRecording(projectId: string, sessionId: string): Promi
 export async function stopCapture(projectId: string, sessionId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/capture/stop`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/capture/stop`, {
       method: "POST",
     });
     if (!response.ok) {
@@ -387,7 +387,7 @@ export interface ReplayStatus {
 export async function startReplay(projectId: string, sessionId: string, speed: number): Promise<{ replay_id: string } | null> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/start`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ speed }),
@@ -406,7 +406,7 @@ export async function startReplay(projectId: string, sessionId: string, speed: n
 export async function stopReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/stop`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/stop`, {
       method: "POST",
     });
     return response.ok;
@@ -419,7 +419,7 @@ export async function stopReplay(projectId: string, sessionId: string, replayId:
 export async function pauseReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/pause`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/pause`, {
       method: "POST",
     });
     return response.ok;
@@ -432,7 +432,7 @@ export async function pauseReplay(projectId: string, sessionId: string, replayId
 export async function resumeReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/resume`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/resume`, {
       method: "POST",
     });
     return response.ok;
@@ -445,7 +445,7 @@ export async function resumeReplay(projectId: string, sessionId: string, replayI
 export async function stepReplay(projectId: string, sessionId: string, replayId: string): Promise<boolean> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/step`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/step`, {
       method: "POST",
     });
     return response.ok;
@@ -458,7 +458,7 @@ export async function stepReplay(projectId: string, sessionId: string, replayId:
 export async function getReplayStatus(projectId: string, sessionId: string, replayId: string): Promise<ReplayStatus | null> {
   const base = getBackendBaseUrl();
   try {
-    const response = await fetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/status`, {
+    const response = await apiFetch(`${base}/api/v1/projects/${projectId}/sessions/${sessionId}/replay/${replayId}/status`, {
       cache: "no-store",
     });
     if (!response.ok) return null;

@@ -1,7 +1,7 @@
 [package]
-name = "app"
-version = "0.1.1"
-description = "A Tauri App"
+name = "Shigawire"
+version = "0.1.2"
+description = "Shigawire Dev"
 authors = ["you"]
 license = ""
 repository = ""
