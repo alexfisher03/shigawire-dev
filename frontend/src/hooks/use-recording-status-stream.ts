@@ -39,7 +39,6 @@ export function useRecordingStatusStream(): {
         try {
           setStatus(parseRecordingStatus(JSON.parse(ev.data)));
         } catch {
-          /* keep last known status */
         }
       },
       onConnectionLost: () => {
